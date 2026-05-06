@@ -1,0 +1,324 @@
+# OpenHands Agent Server UI Reference
+
+This file is the long-lived contract reference behind the `openhands-agent-server-ui` skill.
+
+## Server surfaces
+
+A running OpenHands agent-server exposes three browser-facing surfaces:
+
+1. **REST under `/api`** for conversations, events, tools, files, settings, bash operations, and other control surfaces.
+2. **WebSockets under `/sockets`** for live conversation events and bash event streams.
+3. **Root/discovery routes** such as `/alive`, `/health`, `/ready`, `/server_info`, `/docs`, `/redoc`, and `/openapi.json`.
+
+If static files are mounted, `/` may redirect to `/static/` or `/static/index.html`. If static files are not mounted, `/` returns server info.
+
+## Discovery checklist
+
+Before writing UI logic, inspect the live server:
+
+- `GET /alive` — process liveness
+- `GET /health` — basic health
+- `GET /ready` — initialization readiness
+- `GET /server_info` — versions, title, usable tools, docs links
+- `GET /docs` — interactive FastAPI docs
+- `GET /redoc` — ReDoc documentation
+- `GET /openapi.json` — machine-readable schema
+- `GET /api/tools/` — currently registered tool names
+
+If the running server and repository docs differ, trust the live server contract first.
+
+## Base URL patterns
+
+### Same-origin UI
+
+- REST base: `${window.location.origin}/api`
+- WebSocket base: `ws://${window.location.host}` or `wss://${window.location.host}`
+
+### Separate frontend origin
+
+- REST base: `${SERVER_ORIGIN}/api`
+- WebSocket base: `${SERVER_ORIGIN}` with `http` replaced by `ws`
+- Cross-origin deployments require the server to allow the frontend origin via CORS.
+
+## Authentication
+
+### REST
+
+When the server is configured with session API keys, endpoints under `/api` require:
+
+```http
+X-Session-API-Key: <your-session-api-key>
+```
+
+### WebSockets
+
+Browser clients should prefer first-message auth. Open the socket, then immediately send:
+
+```json
+{"type":"auth","session_api_key":"<your-session-api-key>"}
+```
+
+Legacy fallbacks exist but are not the preferred browser path:
+
+- `session_api_key` query parameter
+- `X-Session-API-Key` WebSocket header for non-browser clients
+
+## Key response shapes
+
+### Success response
+
+Many mutating endpoints return:
+
+```json
+{ "success": true }
+```
+
+### Paged response
+
+List endpoints return:
+
+```json
+{
+  "items": [],
+  "next_page_id": null
+}
+```
+
+### ConversationInfo highlights
+
+Important UI fields often include:
+
+```json
+{
+  "id": "uuid",
+  "title": "optional title",
+  "created_at": "timestamp",
+  "updated_at": "timestamp",
+  "execution_status": "idle|running|paused|waiting_for_confirmation|finished|error|stuck|deleting",
+  "tags": {},
+  "workspace": { "kind": "LocalWorkspace", "working_dir": "workspace/project" },
+  "agent": {}
+}
+```
+
+### Event shape
+
+Event history and event WebSockets emit serialized event objects with fields such as:
+
+```json
+{
+  "kind": "ConcreteEventType",
+  "id": "event-id",
+  "timestamp": "iso-timestamp",
+  "source": "user|agent|environment|..."
+}
+```
+
+Treat `kind` as open-ended. New event variants may appear over time.
+
+### SendMessageRequest over REST
+
+The simplest write path is:
+
+```json
+{
+  "role": "user",
+  "content": [{ "type": "text", "text": "Build a todo app" }],
+  "run": true
+}
+```
+
+## Core REST API
+
+### Discovery and tooling
+
+- `GET /alive`
+- `GET /health`
+- `GET /ready`
+- `GET /server_info`
+- `GET /api/tools/`
+
+### Conversations
+
+- `GET /api/conversations/search?page_id=<cursor>&limit=100&status=<status>&sort_order=<order>`
+- `GET /api/conversations/count`
+- `GET /api/conversations/{conversation_id}`
+- `POST /api/conversations`
+- `PATCH /api/conversations/{conversation_id}`
+- `DELETE /api/conversations/{conversation_id}`
+- `POST /api/conversations/{conversation_id}/run`
+- `POST /api/conversations/{conversation_id}/pause`
+- `POST /api/conversations/{conversation_id}/fork`
+- `POST /api/conversations/{conversation_id}/condense`
+- `GET /api/conversations/{conversation_id}/agent_final_response`
+- `POST /api/conversations/{conversation_id}/ask_agent`
+- `POST /api/conversations/{conversation_id}/secrets`
+- `POST /api/conversations/{conversation_id}/confirmation_policy`
+- `POST /api/conversations/{conversation_id}/security_analyzer`
+- `POST /api/conversations/{conversation_id}/switch_profile`
+- `POST /api/conversations/{conversation_id}/switch_llm`
+
+Important notes:
+
+- `POST /api/conversations` returns full `ConversationInfo`, not only an ID.
+- If the client wants to choose the ID, the field is `conversation_id`, not `id`.
+- There is **no dedicated resume endpoint**. To start or resume execution, call `POST /api/conversations/{conversation_id}/run`.
+
+### Events
+
+- `GET /api/conversations/{conversation_id}/events/search`
+- `GET /api/conversations/{conversation_id}/events/count`
+- `GET /api/conversations/{conversation_id}/events/{event_id}`
+- `POST /api/conversations/{conversation_id}/events`
+- `POST /api/conversations/{conversation_id}/events/respond_to_confirmation`
+
+Useful filters on event search include:
+
+- `page_id`
+- `limit` up to 100
+- `kind`
+- `source`
+- `body`
+- `sort_order=TIMESTAMP|TIMESTAMP_DESC`
+- `timestamp__gte`
+- `timestamp__lt`
+
+### File transfer
+
+- `POST /api/file/upload?path=/absolute/path/in/workspace.txt`
+- `GET /api/file/download?path=/absolute/path/in/workspace.txt`
+- `GET /api/file/download-trajectory/{conversation_id}`
+
+Paths must be absolute.
+
+### Bash / terminal endpoints
+
+- `GET /api/bash/bash_events/search`
+- `GET /api/bash/bash_events/{event_id}`
+- `POST /api/bash/start_bash_command`
+- `POST /api/bash/execute_bash_command`
+- `DELETE /api/bash/bash_events`
+
+Useful request shape:
+
+```json
+{
+  "command": "ls -la",
+  "cwd": "/workspace/project",
+  "timeout": 300
+}
+```
+
+### Settings endpoints
+
+Useful for admin or advanced configuration UIs:
+
+- `GET /api/settings`
+- `PATCH /api/settings`
+- `GET /api/settings/agent-schema`
+- `GET /api/settings/conversation-schema`
+- `GET /api/settings/secrets`
+- `POST /api/settings/secrets`
+- `GET /api/settings/secrets/{name}`
+- `DELETE /api/settings/secrets/{name}`
+
+## WebSocket API
+
+### Conversation events stream
+
+Main live update channel:
+
+```text
+WS /sockets/events/{conversation_id}
+```
+
+Supported replay query parameters:
+
+- `resend_mode=all`
+- `resend_mode=since&after_timestamp=<ISO-8601 timestamp>`
+
+Best practice:
+
+- store the latest rendered event timestamp
+- reconnect with `resend_mode=since`
+- de-duplicate by event `id`
+
+The socket can also accept inbound message payloads after authentication, but the server validates those payloads as `Message` objects, not the REST `SendMessageRequest` shape with `run`. For browser SPAs, REST remains the simpler write path.
+
+### Bash events stream
+
+```text
+WS /sockets/bash-events
+```
+
+Supports:
+
+- first-message auth
+- optional `resend_mode=all`
+- inbound `ExecuteBashRequest` payloads to start commands
+
+## Security and secret-handling notes
+
+### Browser-safe defaults
+
+Do not default to shipping raw LLM or provider API keys inside browser bundles, local storage, URLs, or logs.
+
+Safer patterns:
+
+1. **Trusted/internal admin UI** — acceptable when the UI and users are in the same trust boundary as the server.
+2. **Server-managed settings** — let the server persist settings and secrets instead of asking the browser to own them.
+3. **Encrypted round-tripping** — `GET /api/settings` supports `X-Expose-Secrets: encrypted`, and the resulting encrypted values can be sent back in agent settings with `secrets_encrypted: true` for trusted authenticated clients.
+
+### Important trust-model nuance
+
+The agent-server does **not** provide role-based authorization for secret exposure modes. Any client that can authenticate with the session API key is treated as part of the same trust domain.
+
+That means:
+
+- `X-Expose-Secrets: plaintext` is backend-only in practice
+- `X-Expose-Secrets: encrypted` is safer for browser round-tripping, but still assumes an authenticated trusted client
+- public multi-tenant browser clients should be designed very carefully
+
+## Recommended SPA architecture
+
+Prefer a thin client with:
+
+- `fetch()` for REST writes and initial reads
+- one active conversation events WebSocket for the selected conversation
+- normalized client state keyed by conversation ID and event ID
+- optimistic UI only where it clearly improves UX
+- a renderer that branches by `event.kind`
+
+A strong initial feature order is:
+
+1. health and discovery panel
+2. conversation list
+3. conversation create form
+4. conversation detail pane
+5. event history view
+6. live event stream
+7. send message composer
+8. status badges
+9. confirmation UI
+10. optional file transfer
+11. optional bash panel
+
+## Maintenance sources in the SDK repo
+
+When refreshing this reference, inspect these files first:
+
+- `openhands-agent-server/openhands/agent_server/api.py`
+- `openhands-agent-server/openhands/agent_server/conversation_router.py`
+- `openhands-agent-server/openhands/agent_server/event_router.py`
+- `openhands-agent-server/openhands/agent_server/sockets.py`
+- `openhands-agent-server/openhands/agent_server/file_router.py`
+- `openhands-agent-server/openhands/agent_server/bash_router.py`
+- `openhands-agent-server/openhands/agent_server/server_details_router.py`
+- `openhands-agent-server/openhands/agent_server/settings_router.py`
+
+Helpful implementation references:
+
+- `scripts/agent_server_ui/static/app.js`
+- `scripts/websocket_client.html`
+
+Treat those client-side examples as implementation inspiration, not as a stronger source of truth than the current router code or live OpenAPI schema.
