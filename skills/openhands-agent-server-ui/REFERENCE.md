@@ -2,6 +2,15 @@
 
 This file is the long-lived contract reference behind the `openhands-agent-server-ui` skill.
 
+## Intended deployment model
+
+This reference assumes the OpenHands agent-server and any SPA built from this skill are running either:
+
+- on a local machine controlled by the user, or
+- inside an authenticated remote environment where the browser client is already considered part of the same trust boundary as the server
+
+This is not guidance for public internet clients, anonymous users, or multi-tenant browser applications.
+
 ## Server surfaces
 
 A running OpenHands agent-server exposes three browser-facing surfaces:
@@ -57,6 +66,8 @@ Browser clients should prefer first-message auth. Open the socket, then immediat
 ```json
 {"type":"auth","session_api_key":"<your-session-api-key>"}
 ```
+
+For this skill's intended local or trusted-environment deployments, a browser-held session key can be acceptable. Do not reuse that pattern for public or multi-tenant browser clients.
 
 Legacy fallbacks exist but are not the preferred browser path:
 
@@ -262,6 +273,8 @@ Supports:
 ### Browser-safe defaults
 
 Do not default to shipping raw LLM or provider API keys inside browser bundles, local storage, URLs, or logs.
+
+For this skill's intended trust boundary, browser access to a session API key can be acceptable as an internal convenience. Even then, treat it as sensitive: avoid exposing it to unnecessary scripts, logs, screenshots, or storage.
 
 Safer patterns:
 

@@ -1,5 +1,7 @@
 # OpenHands Agent Server UI Examples
 
+These examples assume the agent-server and SPA are running either on a local machine or inside an authenticated trusted environment. They are not intended as copy-paste patterns for public or multi-tenant browser deployments.
+
 ## Same-origin base URLs
 
 ```js
@@ -19,6 +21,8 @@ const wsBaseUrl = SERVER_ORIGIN.replace(/^http/, 'ws');
 ```
 
 ## REST helper with session API key
+
+Use this pattern only when the browser client is already inside the same trust boundary as the server, such as a local machine or trusted remote workspace.
 
 ```js
 const sessionApiKey = window.sessionApiKey ?? null;
@@ -52,6 +56,8 @@ async function api(path, options = {}) {
 ```
 
 ## Connect to the conversation events socket
+
+This example assumes the session API key is being supplied by a trusted local or authenticated environment.
 
 ```js
 function connectConversationEvents(conversationId, afterTimestamp = null) {
@@ -98,7 +104,7 @@ console.log(conversation.execution_status);
 
 ## Create a conversation for a trusted internal UI
 
-Use this only when the browser UI is inside the same trust boundary as the server and can legitimately handle provider credentials.
+Use this only when the browser UI is inside the same trust boundary as the server and can legitimately handle provider credentials, such as a local machine or authenticated internal workspace.
 
 ```js
 const response = await api('/conversations', {
@@ -232,6 +238,8 @@ const output = await api('/bash/execute_bash_command', {
 ```
 
 ## Browser bash-events socket
+
+This example also assumes a trusted local or authenticated environment.
 
 ```js
 function connectBashEvents() {

@@ -15,6 +15,15 @@ Use this skill when building or extending a browser UI against an **already runn
 
 This is a **maintained reference skill for code-writing work**. It is intentionally more durable than a quick everyday skill. Keep it aligned with the running server and the `software-agent-sdk` repo.
 
+## Intended trust boundary
+
+This skill assumes the agent-server and the browser UI are running either:
+
+- on a local machine controlled by the user, or
+- inside an authenticated remote environment where the UI users are already trusted and share the same trust boundary as the server
+
+It is **not** a pattern for public, anonymous, or multi-tenant browser deployments.
+
 ## First principles
 
 - Trust the running server's `/docs` and `/openapi.json` first if there is any contract drift.
@@ -76,7 +85,8 @@ Only add these when the product actually needs them:
 - Do **not** assume browsers can send custom WebSocket headers. Use first-message auth.
 - Do **not** invent a `/resume` endpoint. Resuming uses `POST /api/conversations/{conversation_id}/run`.
 - Do **not** assume `POST /api/conversations` returns only an ID. It returns full `ConversationInfo`.
-- Do **not** expose raw LLM or provider API keys in public browser code by default.
+- Do **not** expose raw LLM or provider API keys in browser code unless the UI is inside the intended trusted environment for this skill.
+- Treat browser-held session API keys as trusted-environment-only convenience, not as a safe default for public or multi-tenant clients.
 - For browser-based settings flows, prefer trusted/internal UIs, server-managed settings, or encrypted settings round-tripping instead of raw plaintext secrets.
 
 ## Companion files
