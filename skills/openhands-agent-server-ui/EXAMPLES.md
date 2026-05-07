@@ -20,6 +20,20 @@ const apiBaseUrl = `${SERVER_ORIGIN}/api`;
 const wsBaseUrl = SERVER_ORIGIN.replace(/^http/, 'ws');
 ```
 
+## Separate frontend origin with proxy path prefix
+
+Use this when the server sits behind an ingress path such as `/runtime/55313`.
+
+```js
+const SERVER_ORIGIN = 'https://your-gateway.example.com';
+const PATH_PREFIX = '/runtime/55313';
+const apiBaseUrl = `${SERVER_ORIGIN}${PATH_PREFIX}/api`;
+const wsBaseUrl = `${SERVER_ORIGIN.replace(/^http/, 'ws')}${PATH_PREFIX}`;
+```
+
+Do not drop `PATH_PREFIX` when building WebSocket URLs.
+
+
 ## REST helper with session API key
 
 Use this pattern only when the browser client is already inside the same trust boundary as the server, such as a local machine or trusted remote workspace.
@@ -55,6 +69,42 @@ async function api(path, options = {}) {
 }
 ```
 
+
+## Read server info and gate on version
+
+Tie the minimum version to your frontend release instead of guessing at compatibility.
+
+```js
+function compareSemver(left, right) {
+  const a = left.replace(/^v/, '').split('.').map(Number);
+  const b = right.replace(/^v/, '').split('.').map(Number);
+
+  for (let i = 0; i < 3; i += 1) {
+    if ((a[i] ?? 0) > (b[i] ?? 0)) return 1;
+    if ((a[i] ?? 0) < (b[i] ?? 0)) return -1;
+  }
+  return 0;
+}
+
+async function getServerInfo() {
+  const response = await fetch(`${apiBaseUrl.replace(/\/api$/, '')}/server_info`);
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+const minimumSupportedVersion = '1.17.0';
+const serverInfo = await getServerInfo();
+
+if (compareSemver(serverInfo.version, minimumSupportedVersion) < 0) {
+  throw new Error(
+    `Agent server ${serverInfo.version} is too old for this UI. ` +
+      `Need ${minimumSupportedVersion} or newer.`,
+  );
+}
+
+console.log(serverInfo.usable_tools);
+```
+
 ## Connect to the conversation events socket
 
 This example assumes the session API key is being supplied by a trusted local or authenticated environment.
@@ -86,6 +136,35 @@ function connectConversationEvents(conversationId, afterTimestamp = null) {
 
   return ws;
 }
+```
+
+## Search workspace subdirectories
+
+```js
+const home = await api('/file/home');
+const subdirs = await api(
+  `/file/search_subdirs?path=${encodeURIComponent(home.home)}&limit=20`,
+);
+console.log(subdirs.items);
+```
+
+## Load skills for a workspace
+
+```js
+const projectDir = '/workspace/project'; // or activeConversation.workspace?.working_dir
+
+const skills = await api('/skills', {
+  method: 'POST',
+  body: JSON.stringify({
+    load_public: true,
+    load_user: true,
+    load_project: true,
+    load_org: false,
+    project_dir: projectDir,
+  }),
+});
+
+console.log(skills.skills.map((skill) => skill.name));
 ```
 
 ## Search conversations
