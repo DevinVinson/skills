@@ -34,6 +34,18 @@ Before writing UI logic, inspect the live server:
 - `GET /openapi.json` — machine-readable schema
 - `GET /api/tools/` — currently registered tool names
 
+If you expect a richer `agent-canvas`-style UI, also inspect:
+
+- `POST /api/skills` — merged skill inventory for the workspace
+- `POST /api/hooks` — project hook configuration
+- `GET /api/file/home` — server home directory for file pickers
+- `GET /api/file/search_subdirs` — paged directory search for workspace pickers
+- `GET /api/git/changes` and `GET /api/git/diff` — optional changes views
+- `GET /api/llm/providers`, `GET /api/llm/models`, and `GET /api/llm/models/verified` — optional model pickers
+- `GET /api/vscode/url` and `GET /api/desktop/url` — optional editor or desktop launch surfaces
+
+Record `/server_info.version` early and decide whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. The current `agent-canvas` frontend performs an explicit compatibility check instead of trying to infer partial support.
+
 If the running server and repository docs differ, trust the live server contract first.
 
 ## Base URL patterns
@@ -48,6 +60,15 @@ If the running server and repository docs differ, trust the live server contract
 - REST base: `${SERVER_ORIGIN}/api`
 - WebSocket base: `${SERVER_ORIGIN}` with `http` replaced by `ws`
 - Cross-origin deployments require the server to allow the frontend origin via CORS.
+
+### Proxy or path-prefix deployments
+
+If the server is exposed behind a shared ingress prefix such as `/runtime/55313`, preserve that prefix for both REST and WebSocket URLs:
+
+- REST base: `${SERVER_ORIGIN}/runtime/55313/api`
+- WebSocket base: `${SERVER_ORIGIN}` with `http` replaced by `ws`, then append `/runtime/55313`
+
+Do not derive WebSocket URLs from host alone in these deployments. Preserve the same path prefix used for `/api`.
 
 ## Authentication
 
@@ -148,12 +169,18 @@ The simplest write path is:
 - `GET /ready`
 - `GET /server_info`
 - `GET /api/tools/`
+- `POST /api/skills`
+- `POST /api/hooks`
+- `GET /api/llm/providers`
+- `GET /api/llm/models`
+- `GET /api/llm/models/verified`
 
 ### Conversations
 
 - `GET /api/conversations/search?page_id=<cursor>&limit=100&status=<status>&sort_order=<order>`
 - `GET /api/conversations/count`
 - `GET /api/conversations/{conversation_id}`
+- `GET /api/conversations?ids=<uuid>&ids=<uuid>`
 - `POST /api/conversations`
 - `PATCH /api/conversations/{conversation_id}`
 - `DELETE /api/conversations/{conversation_id}`
@@ -180,6 +207,7 @@ Important notes:
 - `GET /api/conversations/{conversation_id}/events/search`
 - `GET /api/conversations/{conversation_id}/events/count`
 - `GET /api/conversations/{conversation_id}/events/{event_id}`
+- `GET /api/conversations/{conversation_id}/events?event_ids=<id>&event_ids=<id>`
 - `POST /api/conversations/{conversation_id}/events`
 - `POST /api/conversations/{conversation_id}/events/respond_to_confirmation`
 
@@ -194,11 +222,13 @@ Useful filters on event search include:
 - `timestamp__gte`
 - `timestamp__lt`
 
-### File transfer
+### Files and workspace helpers
 
 - `POST /api/file/upload?path=/absolute/path/in/workspace.txt`
 - `GET /api/file/download?path=/absolute/path/in/workspace.txt`
 - `GET /api/file/download-trajectory/{conversation_id}`
+- `GET /api/file/home`
+- `GET /api/file/search_subdirs?path=/absolute/path&limit=100&page_id=<cursor>`
 
 Paths must be absolute.
 
@@ -206,6 +236,7 @@ Paths must be absolute.
 
 - `GET /api/bash/bash_events/search`
 - `GET /api/bash/bash_events/{event_id}`
+- `GET /api/bash/bash_events/`
 - `POST /api/bash/start_bash_command`
 - `POST /api/bash/execute_bash_command`
 - `DELETE /api/bash/bash_events`
@@ -220,6 +251,14 @@ Useful request shape:
 }
 ```
 
+### Git, editor, and desktop helpers
+
+- `GET /api/git/changes?path=/absolute/path/to/repo`
+- `GET /api/git/diff?path=/absolute/path/to/file/or/repo`
+- `GET /api/vscode/url?base_url=<optional-browser-base>`
+- `GET /api/vscode/status`
+- `GET /api/desktop/url?base_url=<optional-browser-base>`
+
 ### Settings endpoints
 
 Useful for admin or advanced configuration UIs:
@@ -232,6 +271,29 @@ Useful for admin or advanced configuration UIs:
 - `POST /api/settings/secrets`
 - `GET /api/settings/secrets/{name}`
 - `DELETE /api/settings/secrets/{name}`
+
+### Skills and hooks request shapes
+
+Typical request bodies:
+
+```json
+{
+  "load_public": true,
+  "load_user": true,
+  "load_project": true,
+  "load_org": false,
+  "project_dir": "/workspace/project"
+}
+```
+
+```json
+{
+  "project_dir": "/workspace/project"
+}
+```
+
+Use the active conversation's `workspace.working_dir` when you want skills or hooks for that workspace instead of a generic server default.
+
 
 ## WebSocket API
 
@@ -328,6 +390,21 @@ When refreshing this reference, inspect these files first:
 - `openhands-agent-server/openhands/agent_server/bash_router.py`
 - `openhands-agent-server/openhands/agent_server/server_details_router.py`
 - `openhands-agent-server/openhands/agent_server/settings_router.py`
+- `openhands-agent-server/openhands/agent_server/skills_router.py`
+- `openhands-agent-server/openhands/agent_server/hooks_router.py`
+- `openhands-agent-server/openhands/agent_server/git_router.py`
+- `openhands-agent-server/openhands/agent_server/vscode_router.py`
+- `openhands-agent-server/openhands/agent_server/desktop_router.py`
+- `openhands-agent-server/openhands/agent_server/llm_router.py`
+
+Also check these `agent-canvas` files to understand the frontend's current assumptions:
+
+- `src/api/agent-server-compatibility.ts`
+- `src/api/agent-server-adapter.ts`
+- `src/api/settings-service/settings-service.api.ts`
+- `src/api/skills-service.ts`
+- `src/api/files-service/files-service.api.ts`
+- `src/utils/websocket-url.ts`
 
 Helpful implementation references:
 

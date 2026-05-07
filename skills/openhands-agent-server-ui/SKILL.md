@@ -27,9 +27,11 @@ It is **not** a pattern for public, anonymous, or multi-tenant browser deploymen
 ## First principles
 
 - Trust the running server's `/docs` and `/openapi.json` first if there is any contract drift.
-- Use `/server_info` and `/api/tools/` to adapt to the deployment you actually have.
+- Use `/server_info`, `/api/tools/`, and, when relevant, `/api/skills` and `/api/hooks` to adapt to the deployment you actually have.
 - Keep raw event objects and render by `kind` instead of flattening everything into plain strings.
 - Prefer REST for writes and initial reads, and WebSocket for live updates.
+- Do not assume the server is always mounted at the origin root. Reverse proxies may expose `/api` and `/sockets` under a shared path prefix.
+- Surface server-version incompatibility early by checking `/server_info.version` before enabling richer UI features.
 
 ## Workflow
 
@@ -45,10 +47,26 @@ Inspect these routes before building UI behavior:
 - `GET /openapi.json`
 - `GET /api/tools/`
 
+Capture the server version from `/server_info` and decide up front whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. The current `agent-canvas` frontend does an explicit compatibility check instead of guessing.
+
+If you want `agent-canvas`-style surfaces, also inspect these optional endpoints:
+
+- `POST /api/skills`
+- `POST /api/hooks`
+- `GET /api/file/home`
+- `GET /api/file/search_subdirs`
+- `GET /api/git/changes`
+- `GET /api/git/diff`
+- `GET /api/llm/providers`
+- `GET /api/llm/models`
+- `GET /api/vscode/url`
+- `GET /api/desktop/url`
+
 ### 2. Establish base URLs and auth
 
-- Same-origin SPA: REST base is typically `${window.location.origin}/api`
+- Same-origin SPA mounted at the server root: REST base is typically `${window.location.origin}/api`
 - Same-origin WebSocket base is typically `ws(s)://${window.location.host}`
+- If the server is exposed behind a proxy path such as `/runtime/<port>`, preserve that same prefix for both REST and WebSocket URLs.
 - Browser WebSocket auth should use first-message auth with:
 
 ```json
@@ -75,6 +93,11 @@ Start with:
 Only add these when the product actually needs them:
 
 - file upload/download
+- file or workspace picker via `/api/file/home` and `/api/file/search_subdirs`
+- skills or hook inspection via `/api/skills` and `/api/hooks`
+- git changes or diff panels via `/api/git/changes` and `/api/git/diff`
+- model or provider pickers via `/api/llm/providers` and `/api/llm/models`
+- VS Code or desktop launchers via `/api/vscode/url` and `/api/desktop/url`
 - bash or terminal panel
 - settings/admin panels
 - profile switching or advanced security controls
@@ -105,5 +128,20 @@ When updating this skill, re-check these sources in `software-agent-sdk`:
 - `openhands-agent-server/openhands/agent_server/file_router.py`
 - `openhands-agent-server/openhands/agent_server/bash_router.py`
 - `openhands-agent-server/openhands/agent_server/server_details_router.py`
+- `openhands-agent-server/openhands/agent_server/settings_router.py`
+- `openhands-agent-server/openhands/agent_server/skills_router.py`
+- `openhands-agent-server/openhands/agent_server/hooks_router.py`
+- `openhands-agent-server/openhands/agent_server/git_router.py`
+- `openhands-agent-server/openhands/agent_server/vscode_router.py`
+- `openhands-agent-server/openhands/agent_server/desktop_router.py`
+- `openhands-agent-server/openhands/agent_server/llm_router.py`
+
+Also re-check these `agent-canvas` sources for the frontend's current expectations:
+
+- `src/api/agent-server-compatibility.ts`
+- `src/api/agent-server-adapter.ts`
+- `src/api/settings-service/settings-service.api.ts`
+- `src/api/skills-service.ts`
+- `src/utils/websocket-url.ts`
 
 If repo docs, examples, and the running server disagree, prefer the running server's `/docs` and `/openapi.json`, then the current router source.
