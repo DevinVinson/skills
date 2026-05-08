@@ -4,11 +4,15 @@
 
 ### Match the design system
 
-> Build this UI following the OpenHands design system. Use semantic tokens for colors, `text-sm` as the default body size, `rounded-md` for controls, `rounded-lg` for containers, `hover:bg-muted/60` for dark interactive surfaces, and `hover:bg-primary/85` for primary buttons.
+> Build this UI following the OpenHands design system. Use semantic tokens for colors, `text-sm` as the default body size, `rounded-md` for controls, `rounded-lg` for containers, `hover:bg-muted/60` for dark interactive surfaces, and `hover:bg-primary/85` for buttons styled with `bg-primary text-primary-foreground`.
 
 ### Extend an existing screen
 
 > Restyle this feature to feel native to OpenHands. Reuse the project's existing `Button`, `Input`, and other `components/ui` primitives before creating new styles.
+
+### Normalize drift in touched code only
+
+> Improve the styling of this screen so it better matches OpenHands, but keep the scope tight. Normalize raw palette classes, hover styles, and focus styles only where they are part of the requested change or where a touched shared primitive is clearly the root cause.
 
 ## Example: settings card
 

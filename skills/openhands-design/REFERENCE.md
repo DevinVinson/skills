@@ -2,6 +2,16 @@
 
 This skill is derived from the `OpenHands-Design` package and its `DESIGN.md` guide.
 
+## How to use this reference
+
+Use this file while editing UI code, not just as background reading.
+
+1. Identify whether you are matching the **prototype monorepo** or a project that copied `OpenHands-Design`.
+2. Inspect the local shared tokens and primitives first.
+3. Apply the recipes below to the smallest layer that fixes the design drift.
+4. Compare your changed code against nearby prototype-style patterns before finishing.
+
+
 ## Core visual model
 
 - **Theme:** dark-first, near-black monochrome shell
@@ -48,7 +58,7 @@ This skill is derived from the `OpenHands-Design` package and its `DESIGN.md` gu
 ## Canonical hover and focus behavior
 
 - **Dark interactive surfaces:** `hover:bg-muted/60`
-- **Primary / white buttons:** `hover:bg-primary/85`
+- **Buttons styled with `bg-primary text-primary-foreground`:** `hover:bg-primary/85`
 - **Focus pattern:** `focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2`
 - Prefer `focus-visible:` over `focus:` for shared controls.
 
@@ -130,6 +140,25 @@ Text rows inside dark menus commonly use:
 className="group flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
 ```
 
+## Common drift translations
+
+Use these translations when normalizing touched UI toward the prototype system:
+
+| Drift | Prefer |
+|---|---|
+| `text-white` for standard primary text | `text-foreground` |
+| `bg-black` or `bg-[#0d0d0d]` | `bg-background` |
+| `bg-stone-800`, `bg-neutral-900`, similar raw dark surfaces | `bg-card`, `bg-secondary`, or `bg-muted` based on role |
+| `border-stone-700`, `border-gray-700` | `border-border` |
+| `text-green-400`, `text-emerald-400` | `text-success-foreground` or `text-success` based on context |
+| `text-red-500`, `text-rose-500` | `text-destructive` |
+| `bg-white text-black hover:bg-muted/60` | `bg-primary text-primary-foreground hover:bg-primary/85` |
+| `focus:ring-2` or shared `focus:` patterns | `focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-2` |
+| arbitrary radii like `rounded-[4px]`, `rounded-[6px]` | `rounded-md`, `rounded-lg` |
+| arbitrary text sizes like `text-[12px]`, `text-[14px]` | `text-xs`, `text-sm` |
+
+Do not force these translations everywhere automatically. Apply them where they improve the requested change or where the touched shared primitive is the clear source of drift.
+
 ## Do and do not
 
 ### Do
@@ -144,7 +173,7 @@ className="group flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-mut
 
 - Use `text-white`, `bg-black`, or raw `stone-*` classes for standard app UI.
 - Mix `hover:bg-muted/40`, `/50`, `/70` randomly when `/60` is the intended default.
-- Put dark hover fills on primary white buttons.
+- Put dark hover fills on buttons styled with `bg-primary text-primary-foreground`.
 - Default to `transition-all` when only colors change.
 - Add a full light theme unless the user asked for it.
 
