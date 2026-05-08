@@ -17,6 +17,7 @@ Each skill lives in its own directory and usually includes a primary `SKILL.md`.
 
 - [`standup`](./skills/standup/SKILL.md) — daily standup and task carryover workflow
 - [`openhands-agent-server-ui`](./skills/openhands-agent-server-ui/SKILL.md) — reference skill for building browser UIs against a running OpenHands agent-server
+- [`openhands-design`](./skills/openhands-design/SKILL.md) — reference skill for implementing or restyling UI to match the OpenHands design system
 
 ## Structure
 
