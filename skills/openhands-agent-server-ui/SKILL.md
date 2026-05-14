@@ -52,13 +52,18 @@ Capture the server version from `/server_info` and decide up front whether your 
 If you want `agent-canvas`-style surfaces, also inspect these optional endpoints:
 
 - `POST /api/skills`
+- `POST /api/skills/sync`
 - `POST /api/hooks`
+- `POST /api/auth/workspace-session`
+- `DELETE /api/auth/workspace-session`
 - `GET /api/file/home`
 - `GET /api/file/search_subdirs`
 - `GET /api/git/changes`
 - `GET /api/git/diff`
 - `GET /api/llm/providers`
 - `GET /api/llm/models`
+- `GET /api/conversations/{conversation_id}/workspace`
+- `GET /api/conversations/{conversation_id}/workspace/{file_path:path}`
 - `GET /api/vscode/url`
 - `GET /api/desktop/url`
 
@@ -74,6 +79,7 @@ If you want `agent-canvas`-style surfaces, also inspect these optional endpoints
 ```
 
 - REST auth uses `X-Session-API-Key`
+- Workspace artifact routes under `/api/conversations/{conversation_id}/workspace...` can also use the workspace session cookie minted by `POST /api/auth/workspace-session`; that cookie is not honored by the rest of `/api`
 
 ### 3. Build the core UX first
 
@@ -122,6 +128,7 @@ Only add these when the product actually needs them:
 When updating this skill, re-check these sources in `software-agent-sdk`:
 
 - `openhands-agent-server/openhands/agent_server/api.py`
+- `openhands-agent-server/openhands/agent_server/auth_router.py`
 - `openhands-agent-server/openhands/agent_server/conversation_router.py`
 - `openhands-agent-server/openhands/agent_server/event_router.py`
 - `openhands-agent-server/openhands/agent_server/sockets.py`
@@ -135,6 +142,9 @@ When updating this skill, re-check these sources in `software-agent-sdk`:
 - `openhands-agent-server/openhands/agent_server/vscode_router.py`
 - `openhands-agent-server/openhands/agent_server/desktop_router.py`
 - `openhands-agent-server/openhands/agent_server/llm_router.py`
+- `openhands-agent-server/openhands/agent_server/models.py`
+- `openhands-agent-server/openhands/agent_server/openapi.py`
+- `openhands-agent-server/openhands/agent_server/workspace_router.py`
 
 Also re-check these `agent-canvas` sources for the frontend's current expectations:
 
