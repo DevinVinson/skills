@@ -37,11 +37,14 @@ Before writing UI logic, inspect the live server:
 If you expect a richer `agent-canvas`-style UI, also inspect:
 
 - `POST /api/skills` — merged skill inventory for the workspace
+- `POST /api/skills/sync` — refresh cached skill metadata from disk
 - `POST /api/hooks` — project hook configuration
+- `POST /api/auth/workspace-session` and `DELETE /api/auth/workspace-session` — mint or clear the workspace cookie used for browser embeds
 - `GET /api/file/home` — server home directory for file pickers
 - `GET /api/file/search_subdirs` — paged directory search for workspace pickers
 - `GET /api/git/changes` and `GET /api/git/diff` — optional changes views
 - `GET /api/llm/providers`, `GET /api/llm/models`, and `GET /api/llm/models/verified` — optional model pickers
+- `GET /api/conversations/{conversation_id}/workspace` and `GET /api/conversations/{conversation_id}/workspace/{file_path:path}` — serve workspace HTML/assets for embeds
 - `GET /api/vscode/url` and `GET /api/desktop/url` — optional editor or desktop launch surfaces
 
 Record `/server_info.version` early and decide whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. The current `agent-canvas` frontend performs an explicit compatibility check instead of trying to infer partial support.
@@ -94,6 +97,15 @@ Legacy fallbacks exist but are not the preferred browser path:
 
 - `session_api_key` query parameter
 - `X-Session-API-Key` WebSocket header for non-browser clients
+
+### Workspace artifacts and embedded HTML
+
+The server has a narrower cookie-based auth path for browser embeds that cannot attach custom headers, such as `<iframe src>` and `<img src>` requests.
+
+- `POST /api/auth/workspace-session` mints a workspace session cookie after validating the `X-Session-API-Key` header.
+- `DELETE /api/auth/workspace-session` clears that cookie.
+- The cookie is honored only by the workspace static-file routes under `/api/conversations/{conversation_id}/workspace...`.
+- The rest of `/api` remains header-only to keep the broader CSRF surface closed.
 
 ## Key response shapes
 
@@ -170,7 +182,10 @@ The simplest write path is:
 - `GET /server_info`
 - `GET /api/tools/`
 - `POST /api/skills`
+- `POST /api/skills/sync`
 - `POST /api/hooks`
+- `POST /api/auth/workspace-session`
+- `DELETE /api/auth/workspace-session`
 - `GET /api/llm/providers`
 - `GET /api/llm/models`
 - `GET /api/llm/models/verified`
@@ -229,8 +244,10 @@ Useful filters on event search include:
 - `GET /api/file/download-trajectory/{conversation_id}`
 - `GET /api/file/home`
 - `GET /api/file/search_subdirs?path=/absolute/path&limit=100&page_id=<cursor>`
+- `GET /api/conversations/{conversation_id}/workspace`
+- `GET /api/conversations/{conversation_id}/workspace/{file_path:path}`
 
-Paths must be absolute.
+Paths must be absolute for the `/api/file/*` helpers. The `/api/conversations/{conversation_id}/workspace...` routes are static-file serving routes rooted at that conversation's local workspace.
 
 ### Bash / terminal endpoints
 
@@ -268,7 +285,7 @@ Useful for admin or advanced configuration UIs:
 - `GET /api/settings/agent-schema`
 - `GET /api/settings/conversation-schema`
 - `GET /api/settings/secrets`
-- `POST /api/settings/secrets`
+- `PUT /api/settings/secrets`
 - `GET /api/settings/secrets/{name}`
 - `DELETE /api/settings/secrets/{name}`
 

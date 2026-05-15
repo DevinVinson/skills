@@ -69,6 +69,45 @@ async function api(path, options = {}) {
 }
 ```
 
+## Mint a workspace session cookie for embeds
+
+Use this only for same-origin or otherwise trusted browser clients that already hold the session API key. This is specifically for workspace artifact routes such as `<iframe src>` and `<img src>`, where the browser cannot attach `X-Session-API-Key` itself.
+
+```js
+async function enableWorkspaceEmbeds() {
+  const response = await fetch(`${apiBaseUrl}/auth/workspace-session`, {
+    method: 'POST',
+    headers: {
+      'X-Session-API-Key': sessionApiKey,
+    },
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
+function workspaceUrl(conversationId, filePath = '') {
+  const encodedPath = filePath
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/');
+
+  return `${apiBaseUrl}/conversations/${conversationId}/workspace${encodedPath ? `/${encodedPath}` : ''}`;
+}
+
+await enableWorkspaceEmbeds();
+document.getElementById('artifact-frame').src = workspaceUrl(
+  conversationId,
+  'reports/index.html',
+);
+```
+
+That cookie is only honored by `/api/conversations/{conversation_id}/workspace...`, not by the rest of `/api`.
+
+
 
 ## Read server info and gate on version
 
