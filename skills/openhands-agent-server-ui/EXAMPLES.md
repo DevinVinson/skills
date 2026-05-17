@@ -105,9 +105,7 @@ document.getElementById('artifact-frame').src = workspaceUrl(
 );
 ```
 
-That cookie is only honored by `/api/conversations/{conversation_id}/workspace...`, not by the rest of `/api`.
-
-
+That cookie route returns `204 No Content`, and the cookie is only honored by `/api/conversations/{conversation_id}/workspace...`, not by the rest of `/api`.
 
 ## Read server info and gate on version
 
@@ -204,6 +202,34 @@ const skills = await api('/skills', {
 });
 
 console.log(skills.skills.map((skill) => skill.name));
+```
+
+## Inspect marketplace skills
+
+```js
+const marketplace = await api('/skills/marketplace');
+console.log(marketplace.skills.map((skill) => ({
+  name: skill.name,
+  installed: skill.installed,
+  source: skill.source,
+})));
+```
+
+## Install or enable a skill
+
+```js
+const installedSkill = await api('/skills/install', {
+  method: 'POST',
+  body: JSON.stringify({
+    source: 'github:OpenHands/extensions/skills/github',
+    ref: 'main',
+  }),
+});
+
+await api(`/skills/installed/${encodeURIComponent(installedSkill.name)}`, {
+  method: 'PATCH',
+  body: JSON.stringify({ enabled: true }),
+});
 ```
 
 ## Search conversations
@@ -341,6 +367,16 @@ async function uploadFile(file, absolutePath) {
 ```
 
 Do not manually set `Content-Type` for `FormData`.
+
+## Check VS Code launcher availability
+
+```js
+const vscodeStatus = await api('/vscode/status');
+if (vscodeStatus.enabled && vscodeStatus.running) {
+  const { url } = await api('/vscode/url');
+  console.log('open vscode at', url);
+}
+```
 
 ## Execute a bash command through REST
 

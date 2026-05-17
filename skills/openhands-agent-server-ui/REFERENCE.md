@@ -38,6 +38,11 @@ If you expect a richer `agent-canvas`-style UI, also inspect:
 
 - `POST /api/skills` — merged skill inventory for the workspace
 - `POST /api/skills/sync` — refresh cached skill metadata from disk
+- `GET /api/skills/marketplace` — installable marketplace catalog with installation status
+- `POST /api/skills/install` — install a skill into `~/.openhands/skills/installed/`
+- `GET /api/skills/installed` and `GET /api/skills/installed/{skill_name}` — installed-skill inventory and detail
+- `PATCH /api/skills/installed/{skill_name}` and `POST /api/skills/installed/{skill_name}/refresh` — enable/disable or refresh an installed skill
+- `DELETE /api/skills/installed/{skill_name}` — uninstall a skill
 - `POST /api/hooks` — project hook configuration
 - `POST /api/auth/workspace-session` and `DELETE /api/auth/workspace-session` — mint or clear the workspace cookie used for browser embeds
 - `GET /api/file/home` — server home directory for file pickers
@@ -45,7 +50,7 @@ If you expect a richer `agent-canvas`-style UI, also inspect:
 - `GET /api/git/changes` and `GET /api/git/diff` — optional changes views
 - `GET /api/llm/providers`, `GET /api/llm/models`, and `GET /api/llm/models/verified` — optional model pickers
 - `GET /api/conversations/{conversation_id}/workspace` and `GET /api/conversations/{conversation_id}/workspace/{file_path:path}` — serve workspace HTML/assets for embeds
-- `GET /api/vscode/url` and `GET /api/desktop/url` — optional editor or desktop launch surfaces
+- `GET /api/vscode/url`, `GET /api/vscode/status`, and `GET /api/desktop/url` — optional editor or desktop launch surfaces
 
 Record `/server_info.version` early and decide whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. The current `agent-canvas` frontend performs an explicit compatibility check instead of trying to infer partial support.
 
@@ -102,9 +107,10 @@ Legacy fallbacks exist but are not the preferred browser path:
 
 The server has a narrower cookie-based auth path for browser embeds that cannot attach custom headers, such as `<iframe src>` and `<img src>` requests.
 
-- `POST /api/auth/workspace-session` mints a workspace session cookie after validating the `X-Session-API-Key` header.
-- `DELETE /api/auth/workspace-session` clears that cookie.
+- `POST /api/auth/workspace-session` mints a workspace session cookie after validating the `X-Session-API-Key` header and returns `204 No Content`.
+- `DELETE /api/auth/workspace-session` clears that cookie and also returns `204 No Content`.
 - The cookie is honored only by the workspace static-file routes under `/api/conversations/{conversation_id}/workspace...`.
+- The cookie is scoped to `/api/conversations`, marked `HttpOnly`, and uses `SameSite=None`; the server adds `Secure` and `Partitioned` when the request context allows it.
 - The rest of `/api` remains header-only to keep the broader CSRF surface closed.
 
 ## Key response shapes
@@ -183,6 +189,13 @@ The simplest write path is:
 - `GET /api/tools/`
 - `POST /api/skills`
 - `POST /api/skills/sync`
+- `GET /api/skills/marketplace`
+- `POST /api/skills/install`
+- `GET /api/skills/installed`
+- `GET /api/skills/installed/{skill_name}`
+- `PATCH /api/skills/installed/{skill_name}`
+- `DELETE /api/skills/installed/{skill_name}`
+- `POST /api/skills/installed/{skill_name}/refresh`
 - `POST /api/hooks`
 - `POST /api/auth/workspace-session`
 - `DELETE /api/auth/workspace-session`
@@ -276,6 +289,8 @@ Useful request shape:
 - `GET /api/vscode/status`
 - `GET /api/desktop/url?base_url=<optional-browser-base>`
 
+`/api/vscode/status` is a lightweight capability check for whether a VS Code bridge is available before rendering an "Open in VS Code" action.
+
 ### Settings endpoints
 
 Useful for admin or advanced configuration UIs:
@@ -311,6 +326,23 @@ Typical request bodies:
 
 Use the active conversation's `workspace.working_dir` when you want skills or hooks for that workspace instead of a generic server default.
 
+Installed-skill management uses separate request bodies:
+
+```json
+{
+  "source": "github:OpenHands/extensions/skills/github",
+  "ref": "main",
+  "force": false
+}
+```
+
+```json
+{
+  "enabled": true
+}
+```
+
+Useful installed-skill response fields include `name`, `enabled`, `source`, `resolved_ref`, `installed_at`, and `install_path`. The marketplace catalog returns available skills plus installation status so a UI can render install or update actions without re-deriving that state.
 
 ## WebSocket API
 
