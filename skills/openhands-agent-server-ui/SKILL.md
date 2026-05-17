@@ -53,6 +53,13 @@ If you want `agent-canvas`-style surfaces, also inspect these optional endpoints
 
 - `POST /api/skills`
 - `POST /api/skills/sync`
+- `GET /api/skills/marketplace`
+- `POST /api/skills/install`
+- `GET /api/skills/installed`
+- `GET /api/skills/installed/{skill_name}`
+- `PATCH /api/skills/installed/{skill_name}`
+- `DELETE /api/skills/installed/{skill_name}`
+- `POST /api/skills/installed/{skill_name}/refresh`
 - `POST /api/hooks`
 - `POST /api/auth/workspace-session`
 - `DELETE /api/auth/workspace-session`
@@ -62,9 +69,11 @@ If you want `agent-canvas`-style surfaces, also inspect these optional endpoints
 - `GET /api/git/diff`
 - `GET /api/llm/providers`
 - `GET /api/llm/models`
+- `GET /api/llm/models/verified`
 - `GET /api/conversations/{conversation_id}/workspace`
 - `GET /api/conversations/{conversation_id}/workspace/{file_path:path}`
 - `GET /api/vscode/url`
+- `GET /api/vscode/status`
 - `GET /api/desktop/url`
 
 ### 2. Establish base URLs and auth
@@ -79,7 +88,7 @@ If you want `agent-canvas`-style surfaces, also inspect these optional endpoints
 ```
 
 - REST auth uses `X-Session-API-Key`
-- Workspace artifact routes under `/api/conversations/{conversation_id}/workspace...` can also use the workspace session cookie minted by `POST /api/auth/workspace-session`; that cookie is not honored by the rest of `/api`
+- Workspace artifact routes under `/api/conversations/{conversation_id}/workspace...` can also use the workspace session cookie minted by `POST /api/auth/workspace-session`; those auth endpoints return `204 No Content`, and the cookie is not honored by the rest of `/api`
 
 ### 3. Build the core UX first
 
@@ -101,9 +110,10 @@ Only add these when the product actually needs them:
 - file upload/download
 - file or workspace picker via `/api/file/home` and `/api/file/search_subdirs`
 - skills or hook inspection via `/api/skills` and `/api/hooks`
+- installed-skill or marketplace UI via `/api/skills/marketplace`, `/api/skills/install`, and `/api/skills/installed...`
 - git changes or diff panels via `/api/git/changes` and `/api/git/diff`
-- model or provider pickers via `/api/llm/providers` and `/api/llm/models`
-- VS Code or desktop launchers via `/api/vscode/url` and `/api/desktop/url`
+- model or provider pickers via `/api/llm/providers`, `/api/llm/models`, and `/api/llm/models/verified`
+- VS Code or desktop launchers via `/api/vscode/url`, `/api/vscode/status`, and `/api/desktop/url`
 - bash or terminal panel
 - settings/admin panels
 - profile switching or advanced security controls
