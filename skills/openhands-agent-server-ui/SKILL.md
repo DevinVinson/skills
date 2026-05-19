@@ -27,7 +27,7 @@ It is **not** a pattern for public, anonymous, or multi-tenant browser deploymen
 ## First principles
 
 - Trust the running server's `/docs` and `/openapi.json` first if there is any contract drift.
-- Use `/server_info`, `/api/tools/`, and, when relevant, `/api/skills` and `/api/hooks` to adapt to the deployment you actually have.
+- Use `/server_info`, `/api/tools/`, and, when relevant, `/api/skills`, `/api/hooks`, `/api/profiles`, and `/api/mcp/test` to adapt to the deployment you actually have.
 - Keep raw event objects and render by `kind` instead of flattening everything into plain strings.
 - Prefer REST for writes and initial reads, and WebSocket for live updates.
 - Do not assume the server is always mounted at the origin root. Reverse proxies may expose `/api` and `/sockets` under a shared path prefix.
@@ -47,9 +47,9 @@ Inspect these routes before building UI behavior:
 - `GET /openapi.json`
 - `GET /api/tools/`
 
-Capture the server version from `/server_info` and decide up front whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. The current `agent-canvas` frontend does an explicit compatibility check instead of guessing.
+Capture the server version from `/server_info` and decide up front whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. Handle compatibility explicitly instead of guessing from partial failures.
 
-If you want `agent-canvas`-style surfaces, also inspect these optional endpoints:
+If you want richer admin or workspace-management surfaces, also inspect these optional endpoints:
 
 - `POST /api/skills`
 - `POST /api/skills/sync`
@@ -61,6 +61,12 @@ If you want `agent-canvas`-style surfaces, also inspect these optional endpoints
 - `DELETE /api/skills/installed/{skill_name}`
 - `POST /api/skills/installed/{skill_name}/refresh`
 - `POST /api/hooks`
+- `GET /api/profiles`
+- `GET /api/profiles/{name}`
+- `POST /api/profiles/{name}`
+- `POST /api/profiles/{name}/activate`
+- `POST /api/mcp/test`
+- `POST /api/cloud-proxy`
 - `POST /api/auth/workspace-session`
 - `DELETE /api/auth/workspace-session`
 - `GET /api/file/home`
@@ -111,12 +117,15 @@ Only add these when the product actually needs them:
 - file or workspace picker via `/api/file/home` and `/api/file/search_subdirs`
 - skills or hook inspection via `/api/skills` and `/api/hooks`
 - installed-skill or marketplace UI via `/api/skills/marketplace`, `/api/skills/install`, and `/api/skills/installed...`
+- profile management via `/api/profiles...`
+- MCP configuration validation via `POST /api/mcp/test`
+- same-origin cloud forwarding via `POST /api/cloud-proxy`
 - git changes or diff panels via `/api/git/changes` and `/api/git/diff`
 - model or provider pickers via `/api/llm/providers`, `/api/llm/models`, and `/api/llm/models/verified`
 - VS Code or desktop launchers via `/api/vscode/url`, `/api/vscode/status`, and `/api/desktop/url`
 - bash or terminal panel
 - settings/admin panels
-- profile switching or advanced security controls
+- advanced security controls
 
 ## Guardrails
 
@@ -148,6 +157,9 @@ When updating this skill, re-check these sources in `software-agent-sdk`:
 - `openhands-agent-server/openhands/agent_server/settings_router.py`
 - `openhands-agent-server/openhands/agent_server/skills_router.py`
 - `openhands-agent-server/openhands/agent_server/hooks_router.py`
+- `openhands-agent-server/openhands/agent_server/profiles_router.py`
+- `openhands-agent-server/openhands/agent_server/mcp_router.py`
+- `openhands-agent-server/openhands/agent_server/cloud_proxy_router.py`
 - `openhands-agent-server/openhands/agent_server/git_router.py`
 - `openhands-agent-server/openhands/agent_server/vscode_router.py`
 - `openhands-agent-server/openhands/agent_server/desktop_router.py`
@@ -156,12 +168,12 @@ When updating this skill, re-check these sources in `software-agent-sdk`:
 - `openhands-agent-server/openhands/agent_server/openapi.py`
 - `openhands-agent-server/openhands/agent_server/workspace_router.py`
 
-Also re-check these `agent-canvas` sources for the frontend's current expectations:
+Also re-check the current browser-facing examples in `software-agent-sdk`:
 
-- `src/api/agent-server-compatibility.ts`
-- `src/api/agent-server-adapter.ts`
-- `src/api/settings-service/settings-service.api.ts`
-- `src/api/skills-service.ts`
-- `src/utils/websocket-url.ts`
+- `scripts/agent_server_ui/static/index.html`
+- `scripts/agent_server_ui/static/app.js`
+- `examples/02_remote_agent_server/11_conversation_fork.py`
+- `examples/02_remote_agent_server/12_settings_and_secrets_api.py`
+- `examples/02_remote_agent_server/13_workspace_get_llm.py`
 
 If repo docs, examples, and the running server disagree, prefer the running server's `/docs` and `/openapi.json`, then the current router source.

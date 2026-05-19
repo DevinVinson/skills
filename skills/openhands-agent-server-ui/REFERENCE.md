@@ -34,7 +34,7 @@ Before writing UI logic, inspect the live server:
 - `GET /openapi.json` — machine-readable schema
 - `GET /api/tools/` — currently registered tool names
 
-If you expect a richer `agent-canvas`-style UI, also inspect:
+If you expect a richer admin or workspace-management UI, also inspect:
 
 - `POST /api/skills` — merged skill inventory for the workspace
 - `POST /api/skills/sync` — refresh cached skill metadata from disk
@@ -44,6 +44,9 @@ If you expect a richer `agent-canvas`-style UI, also inspect:
 - `PATCH /api/skills/installed/{skill_name}` and `POST /api/skills/installed/{skill_name}/refresh` — enable/disable or refresh an installed skill
 - `DELETE /api/skills/installed/{skill_name}` — uninstall a skill
 - `POST /api/hooks` — project hook configuration
+- `GET /api/profiles`, `GET /api/profiles/{name}`, `POST /api/profiles/{name}`, and `POST /api/profiles/{name}/activate` — optional profile-management UI
+- `POST /api/mcp/test` — validate one MCP server config before persisting it
+- `POST /api/cloud-proxy` — same-origin proxy to allowlisted OpenHands Cloud hosts
 - `POST /api/auth/workspace-session` and `DELETE /api/auth/workspace-session` — mint or clear the workspace cookie used for browser embeds
 - `GET /api/file/home` — server home directory for file pickers
 - `GET /api/file/search_subdirs` — paged directory search for workspace pickers
@@ -52,7 +55,7 @@ If you expect a richer `agent-canvas`-style UI, also inspect:
 - `GET /api/conversations/{conversation_id}/workspace` and `GET /api/conversations/{conversation_id}/workspace/{file_path:path}` — serve workspace HTML/assets for embeds
 - `GET /api/vscode/url`, `GET /api/vscode/status`, and `GET /api/desktop/url` — optional editor or desktop launch surfaces
 
-Record `/server_info.version` early and decide whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. The current `agent-canvas` frontend performs an explicit compatibility check instead of trying to infer partial support.
+Record `/server_info.version` early and decide whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. Handle compatibility explicitly instead of trying to infer partial support.
 
 If the running server and repository docs differ, trust the live server contract first.
 
@@ -197,6 +200,14 @@ The simplest write path is:
 - `DELETE /api/skills/installed/{skill_name}`
 - `POST /api/skills/installed/{skill_name}/refresh`
 - `POST /api/hooks`
+- `GET /api/profiles`
+- `GET /api/profiles/{name}`
+- `POST /api/profiles/{name}`
+- `DELETE /api/profiles/{name}`
+- `POST /api/profiles/{name}/rename`
+- `POST /api/profiles/{name}/activate`
+- `POST /api/mcp/test`
+- `POST /api/cloud-proxy`
 - `POST /api/auth/workspace-session`
 - `DELETE /api/auth/workspace-session`
 - `GET /api/llm/providers`
@@ -303,6 +314,39 @@ Useful for admin or advanced configuration UIs:
 - `PUT /api/settings/secrets`
 - `GET /api/settings/secrets/{name}`
 - `DELETE /api/settings/secrets/{name}`
+
+### Profiles endpoints
+
+Useful for profile pickers or trusted internal model-management UIs:
+
+- `GET /api/profiles`
+- `GET /api/profiles/{name}`
+- `POST /api/profiles/{name}`
+- `DELETE /api/profiles/{name}`
+- `POST /api/profiles/{name}/rename`
+- `POST /api/profiles/{name}/activate`
+
+Important notes:
+
+- `GET /api/profiles` returns both a `profiles` array and an `active_profile` field.
+- `GET /api/profiles/{name}` defaults to a browser-safer shape where `config.api_key` is `null` and `api_key_set` indicates whether a secret exists.
+- `GET /api/profiles/{name}` also supports `X-Expose-Secrets: encrypted` or `plaintext`, mirroring the settings secret-exposure patterns.
+- `POST /api/profiles/{name}` saves or overwrites the named profile from a request body shaped like `{ "llm": { ... }, "include_secrets": true }`.
+- `POST /api/profiles/{name}/activate` applies the stored LLM config to current agent settings and records that name as `active_profile`.
+
+### MCP and cloud proxy helpers
+
+Useful for browser-based settings or cloud-connected UIs:
+
+- `POST /api/mcp/test`
+- `POST /api/cloud-proxy`
+
+Important notes:
+
+- `POST /api/mcp/test` validates one candidate MCP server config without persisting it.
+- `POST /api/mcp/test` returns HTTP 200 for both success and expected validation failures; use the JSON body's `ok` flag and `error_kind` instead of treating non-2xx status as the only failure signal.
+- `POST /api/cloud-proxy` forwards a same-origin browser request to an allowlisted OpenHands Cloud host using a body shaped like `{ "host": "https://app.all-hands.dev", "method": "GET", "path": "/api/...", "headers": { ... }, "body": ..., "timeout_seconds": 15 }`.
+- The cloud proxy is intentionally constrained to allowed SaaS hosts; it is not a generic outbound proxy.
 
 ### Skills and hooks request shapes
 
@@ -441,23 +485,21 @@ When refreshing this reference, inspect these files first:
 - `openhands-agent-server/openhands/agent_server/settings_router.py`
 - `openhands-agent-server/openhands/agent_server/skills_router.py`
 - `openhands-agent-server/openhands/agent_server/hooks_router.py`
+- `openhands-agent-server/openhands/agent_server/profiles_router.py`
+- `openhands-agent-server/openhands/agent_server/mcp_router.py`
+- `openhands-agent-server/openhands/agent_server/cloud_proxy_router.py`
 - `openhands-agent-server/openhands/agent_server/git_router.py`
 - `openhands-agent-server/openhands/agent_server/vscode_router.py`
 - `openhands-agent-server/openhands/agent_server/desktop_router.py`
 - `openhands-agent-server/openhands/agent_server/llm_router.py`
 
-Also check these `agent-canvas` files to understand the frontend's current assumptions:
+Also check the current browser-facing examples in `software-agent-sdk`:
 
-- `src/api/agent-server-compatibility.ts`
-- `src/api/agent-server-adapter.ts`
-- `src/api/settings-service/settings-service.api.ts`
-- `src/api/skills-service.ts`
-- `src/api/files-service/files-service.api.ts`
-- `src/utils/websocket-url.ts`
-
-Helpful implementation references:
-
+- `scripts/agent_server_ui/static/index.html`
 - `scripts/agent_server_ui/static/app.js`
 - `scripts/websocket_client.html`
+- `examples/02_remote_agent_server/11_conversation_fork.py`
+- `examples/02_remote_agent_server/12_settings_and_secrets_api.py`
+- `examples/02_remote_agent_server/13_workspace_get_llm.py`
 
 Treat those client-side examples as implementation inspiration, not as a stronger source of truth than the current router code or live OpenAPI schema.
