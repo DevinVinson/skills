@@ -232,6 +232,41 @@ await api(`/skills/installed/${encodeURIComponent(installedSkill.name)}`, {
 });
 ```
 
+## List and activate saved profiles
+
+```js
+const profiles = await api('/profiles');
+console.log(profiles.active_profile, profiles.profiles);
+
+await api(`/profiles/${encodeURIComponent('gpt-5')}/activate`, {
+  method: 'POST',
+});
+```
+
+## Test an MCP server config before saving it
+
+```js
+const probe = await api('/mcp/test', {
+  method: 'POST',
+  body: JSON.stringify({
+    name: 'github',
+    server: {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+    },
+    timeout: 15,
+  }),
+});
+
+if (!probe.ok) {
+  console.warn(`MCP validation failed: ${probe.error_kind} ${probe.error}`);
+} else {
+  console.log('MCP tools', probe.tools);
+}
+```
+
+
 ## Search conversations
 
 ```js
@@ -245,6 +280,56 @@ console.log(page.items, page.next_page_id);
 const conversation = await api(`/conversations/${conversationId}`);
 console.log(conversation.execution_status);
 ```
+
+## Ask the agent a side question without mutating history
+
+```js
+const answer = await api(`/conversations/${conversationId}/ask_agent`, {
+  method: 'POST',
+  body: JSON.stringify({
+    question: 'Summarize the current plan in one sentence.',
+  }),
+});
+
+console.log(answer.response);
+```
+
+## Read the agent's final response summary
+
+```js
+const finalResponse = await api(
+  `/conversations/${conversationId}/agent_final_response`,
+);
+console.log(finalResponse.response);
+```
+
+## Switch a conversation to a saved profile
+
+```js
+await api(`/conversations/${conversationId}/switch_profile`, {
+  method: 'POST',
+  body: JSON.stringify({ profile_name: 'gpt-5' }),
+});
+```
+
+## Same-origin proxy to OpenHands Cloud
+
+```js
+const me = await api('/cloud-proxy', {
+  method: 'POST',
+  body: JSON.stringify({
+    host: 'https://app.all-hands.dev',
+    method: 'GET',
+    path: '/api/user',
+    headers: {
+      Authorization: `Bearer ${cloudToken}`,
+    },
+  }),
+});
+
+console.log(me);
+```
+
 
 ## Create a conversation for a trusted internal UI
 
