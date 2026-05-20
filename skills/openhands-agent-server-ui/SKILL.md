@@ -27,7 +27,7 @@ It is **not** a pattern for public, anonymous, or multi-tenant browser deploymen
 ## First principles
 
 - Trust the running server's `/docs` and `/openapi.json` first if there is any contract drift.
-- Use `/server_info`, `/api/tools/`, and, when relevant, `/api/skills`, `/api/hooks`, `/api/profiles`, and `/api/mcp/test` to adapt to the deployment you actually have.
+- Use `/server_info`, `/api/tools/`, and, when relevant, `/api/skills`, `/api/hooks`, `/api/profiles`, `/api/workspaces`, and `/api/mcp/test` to adapt to the deployment you actually have.
 - Keep raw event objects and render by `kind` instead of flattening everything into plain strings.
 - Prefer REST for writes and initial reads, and WebSocket for live updates.
 - Do not assume the server is always mounted at the origin root. Reverse proxies may expose `/api` and `/sockets` under a shared path prefix.
@@ -71,6 +71,11 @@ If you want richer admin or workspace-management surfaces, also inspect these op
 - `DELETE /api/auth/workspace-session`
 - `GET /api/file/home`
 - `GET /api/file/search_subdirs`
+- `GET /api/workspaces`
+- `POST /api/workspaces`
+- `DELETE /api/workspaces`
+- `POST /api/workspaces/parents`
+- `DELETE /api/workspaces/parents`
 - `GET /api/git/changes`
 - `GET /api/git/diff`
 - `GET /api/llm/providers`
@@ -115,6 +120,7 @@ Only add these when the product actually needs them:
 
 - file upload/download
 - file or workspace picker via `/api/file/home` and `/api/file/search_subdirs`
+- persisted workspace shortcuts via `/api/workspaces` and `/api/workspaces/parents`
 - skills or hook inspection via `/api/skills` and `/api/hooks`
 - installed-skill or marketplace UI via `/api/skills/marketplace`, `/api/skills/install`, and `/api/skills/installed...`
 - profile management via `/api/profiles...`
@@ -167,6 +173,7 @@ When updating this skill, re-check these sources in `software-agent-sdk`:
 - `openhands-agent-server/openhands/agent_server/models.py`
 - `openhands-agent-server/openhands/agent_server/openapi.py`
 - `openhands-agent-server/openhands/agent_server/workspace_router.py`
+- `openhands-agent-server/openhands/agent_server/workspaces_router.py`
 
 Also re-check the current browser-facing examples in `software-agent-sdk`:
 

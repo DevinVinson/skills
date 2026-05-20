@@ -185,6 +185,40 @@ const subdirs = await api(
 console.log(subdirs.items);
 ```
 
+## Persist saved workspaces and parent folders
+
+```js
+const saved = await api('/workspaces');
+console.log(saved.workspaces, saved.workspaceParents);
+
+await api('/workspaces/parents', {
+  method: 'POST',
+  body: JSON.stringify({
+    parents: [
+      {
+        id: '/workspace',
+        name: 'Workspace root',
+        path: '/workspace',
+      },
+    ],
+  }),
+});
+
+await api('/workspaces', {
+  method: 'POST',
+  body: JSON.stringify({
+    workspaces: [
+      {
+        id: '/workspace/project',
+        name: 'project',
+        path: '/workspace/project',
+        parentPath: '/workspace',
+      },
+    ],
+  }),
+});
+```
+
 ## Load skills for a workspace
 
 ```js

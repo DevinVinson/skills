@@ -50,6 +50,7 @@ If you expect a richer admin or workspace-management UI, also inspect:
 - `POST /api/auth/workspace-session` and `DELETE /api/auth/workspace-session` — mint or clear the workspace cookie used for browser embeds
 - `GET /api/file/home` — server home directory for file pickers
 - `GET /api/file/search_subdirs` — paged directory search for workspace pickers
+- `GET /api/workspaces`, `POST /api/workspaces`, `DELETE /api/workspaces`, `POST /api/workspaces/parents`, and `DELETE /api/workspaces/parents` — persist shared workspace shortcuts and parent folders on the server
 - `GET /api/git/changes` and `GET /api/git/diff` — optional changes views
 - `GET /api/llm/providers`, `GET /api/llm/models`, and `GET /api/llm/models/verified` — optional model pickers
 - `GET /api/conversations/{conversation_id}/workspace` and `GET /api/conversations/{conversation_id}/workspace/{file_path:path}` — serve workspace HTML/assets for embeds
@@ -272,6 +273,21 @@ Useful filters on event search include:
 - `GET /api/conversations/{conversation_id}/workspace/{file_path:path}`
 
 Paths must be absolute for the `/api/file/*` helpers. The `/api/conversations/{conversation_id}/workspace...` routes are static-file serving routes rooted at that conversation's local workspace.
+
+### Saved workspaces
+
+- `GET /api/workspaces`
+- `POST /api/workspaces`
+- `DELETE /api/workspaces?path=/absolute/workspace/path`
+- `POST /api/workspaces/parents`
+- `DELETE /api/workspaces/parents?path=/absolute/parent/path`
+
+Important notes:
+
+- `GET /api/workspaces` returns both `workspaces` and `workspaceParents`.
+- Workspace items use `parentPath` in JSON when a parent folder is present.
+- The POST endpoints are idempotent and de-duplicate by `path`.
+- Use `/api/file/home` and `/api/file/search_subdirs` to browse filesystem choices, then persist reusable shortcuts with `/api/workspaces...` so every client connected to the same server sees the same saved list.
 
 ### Bash / terminal endpoints
 
