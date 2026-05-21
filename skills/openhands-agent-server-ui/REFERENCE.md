@@ -37,7 +37,7 @@ Before writing UI logic, inspect the live server:
 If you expect a richer admin or workspace-management UI, also inspect:
 
 - `POST /api/skills` — merged skill inventory for the workspace
-- `POST /api/skills/sync` — refresh cached skill metadata from disk
+- `POST /api/skills/sync` — force-refresh the public skill catalog cache from the configured source
 - `GET /api/skills/marketplace` — installable marketplace catalog with installation status
 - `POST /api/skills/install` — install a skill into `~/.openhands/skills/installed/`
 - `GET /api/skills/installed` and `GET /api/skills/installed/{skill_name}` — installed-skill inventory and detail
@@ -155,6 +155,9 @@ Important UI fields often include:
 }
 ```
 
+Conversation search/get/start/fork responses trim `agent.agent_context.skills` to `[]` by default. Only request `?include_skills=true` if the UI truly needs the legacy full payload.
+
+
 ### Event shape
 
 Event history and event WebSockets emit serialized event objects with fields such as:
@@ -226,6 +229,7 @@ The simplest write path is:
 - `DELETE /api/conversations/{conversation_id}`
 - `POST /api/conversations/{conversation_id}/run`
 - `POST /api/conversations/{conversation_id}/pause`
+- `POST /api/conversations/{conversation_id}/interrupt`
 - `POST /api/conversations/{conversation_id}/fork`
 - `POST /api/conversations/{conversation_id}/condense`
 - `GET /api/conversations/{conversation_id}/agent_final_response`
@@ -241,6 +245,7 @@ Important notes:
 - `POST /api/conversations` returns full `ConversationInfo`, not only an ID.
 - If the client wants to choose the ID, the field is `conversation_id`, not `id`.
 - There is **no dedicated resume endpoint**. To start or resume execution, call `POST /api/conversations/{conversation_id}/run`.
+- `POST /api/conversations/{conversation_id}/interrupt` is the immediate cancel path for an in-flight run; `POST /pause` pauses the conversation loop after the current work yields control.
 
 ### Events
 

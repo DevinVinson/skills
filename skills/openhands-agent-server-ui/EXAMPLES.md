@@ -315,6 +315,16 @@ const conversation = await api(`/conversations/${conversationId}`);
 console.log(conversation.execution_status);
 ```
 
+If the UI truly needs the full inlined skill payload, opt in explicitly:
+
+```js
+const conversationWithSkills = await api(
+  `/conversations/${conversationId}?include_skills=true`,
+);
+console.log(conversationWithSkills.agent.agent_context.skills);
+```
+
+
 ## Ask the agent a side question without mutating history
 
 ```js
@@ -448,6 +458,14 @@ await api(`/conversations/${conversationId}/events`, {
   }),
 });
 ```
+
+## Interrupt immediately
+
+```js
+await api(`/conversations/${conversationId}/interrupt`, { method: 'POST' });
+```
+
+Use `/interrupt` when the UI needs to cancel an in-flight run right away. `/pause` is cooperative and takes effect once the current work yields control.
 
 ## Pause and resume
 
