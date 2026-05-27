@@ -20,6 +20,20 @@ const apiBaseUrl = `${SERVER_ORIGIN}/api`;
 const wsBaseUrl = SERVER_ORIGIN.replace(/^http/, 'ws');
 ```
 
+## Separate frontend origin with proxy path prefix
+
+Use this when the server sits behind an ingress path such as `/runtime/55313`.
+
+```js
+const SERVER_ORIGIN = 'https://your-gateway.example.com';
+const PATH_PREFIX = '/runtime/55313';
+const apiBaseUrl = `${SERVER_ORIGIN}${PATH_PREFIX}/api`;
+const wsBaseUrl = `${SERVER_ORIGIN.replace(/^http/, 'ws')}${PATH_PREFIX}`;
+```
+
+Do not drop `PATH_PREFIX` when building WebSocket URLs.
+
+
 ## REST helper with session API key
 
 Use this pattern only when the browser client is already inside the same trust boundary as the server, such as a local machine or trusted remote workspace.
@@ -55,6 +69,79 @@ async function api(path, options = {}) {
 }
 ```
 
+## Mint a workspace session cookie for embeds
+
+Use this only for same-origin or otherwise trusted browser clients that already hold the session API key. This is specifically for workspace artifact routes such as `<iframe src>` and `<img src>`, where the browser cannot attach `X-Session-API-Key` itself.
+
+```js
+async function enableWorkspaceEmbeds() {
+  const response = await fetch(`${apiBaseUrl}/auth/workspace-session`, {
+    method: 'POST',
+    headers: {
+      'X-Session-API-Key': sessionApiKey,
+    },
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
+function workspaceUrl(conversationId, filePath = '') {
+  const encodedPath = filePath
+    .split('/')
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join('/');
+
+  return `${apiBaseUrl}/conversations/${conversationId}/workspace${encodedPath ? `/${encodedPath}` : ''}`;
+}
+
+await enableWorkspaceEmbeds();
+document.getElementById('artifact-frame').src = workspaceUrl(
+  conversationId,
+  'reports/index.html',
+);
+```
+
+That cookie route returns `204 No Content`, and the cookie is only honored by `/api/conversations/{conversation_id}/workspace...`, not by the rest of `/api`.
+
+## Read server info and gate on version
+
+Tie the minimum version to your frontend release instead of guessing at compatibility.
+
+```js
+function compareSemver(left, right) {
+  const a = left.replace(/^v/, '').split('.').map(Number);
+  const b = right.replace(/^v/, '').split('.').map(Number);
+
+  for (let i = 0; i < 3; i += 1) {
+    if ((a[i] ?? 0) > (b[i] ?? 0)) return 1;
+    if ((a[i] ?? 0) < (b[i] ?? 0)) return -1;
+  }
+  return 0;
+}
+
+async function getServerInfo() {
+  const response = await fetch(`${apiBaseUrl.replace(/\/api$/, '')}/server_info`);
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+const minimumSupportedVersion = '1.17.0';
+const serverInfo = await getServerInfo();
+
+if (compareSemver(serverInfo.version, minimumSupportedVersion) < 0) {
+  throw new Error(
+    `Agent server ${serverInfo.version} is too old for this UI. ` +
+      `Need ${minimumSupportedVersion} or newer.`,
+  );
+}
+
+console.log(serverInfo.usable_tools);
+```
+
 ## Connect to the conversation events socket
 
 This example assumes the session API key is being supplied by a trusted local or authenticated environment.
@@ -88,6 +175,132 @@ function connectConversationEvents(conversationId, afterTimestamp = null) {
 }
 ```
 
+## Search workspace subdirectories
+
+```js
+const home = await api('/file/home');
+const subdirs = await api(
+  `/file/search_subdirs?path=${encodeURIComponent(home.home)}&limit=20`,
+);
+console.log(subdirs.items);
+```
+
+## Persist saved workspaces and parent folders
+
+```js
+const saved = await api('/workspaces');
+console.log(saved.workspaces, saved.workspaceParents);
+
+await api('/workspaces/parents', {
+  method: 'POST',
+  body: JSON.stringify({
+    parents: [
+      {
+        id: '/workspace',
+        name: 'Workspace root',
+        path: '/workspace',
+      },
+    ],
+  }),
+});
+
+await api('/workspaces', {
+  method: 'POST',
+  body: JSON.stringify({
+    workspaces: [
+      {
+        id: '/workspace/project',
+        name: 'project',
+        path: '/workspace/project',
+        parentPath: '/workspace',
+      },
+    ],
+  }),
+});
+```
+
+## Load skills for a workspace
+
+```js
+const projectDir = '/workspace/project'; // or activeConversation.workspace?.working_dir
+
+const skills = await api('/skills', {
+  method: 'POST',
+  body: JSON.stringify({
+    load_public: true,
+    load_user: true,
+    load_project: true,
+    load_org: false,
+    project_dir: projectDir,
+  }),
+});
+
+console.log(skills.skills.map((skill) => skill.name));
+```
+
+## Inspect marketplace skills
+
+```js
+const marketplace = await api('/skills/marketplace');
+console.log(marketplace.skills.map((skill) => ({
+  name: skill.name,
+  installed: skill.installed,
+  source: skill.source,
+})));
+```
+
+## Install or enable a skill
+
+```js
+const installedSkill = await api('/skills/install', {
+  method: 'POST',
+  body: JSON.stringify({
+    source: 'github:OpenHands/extensions/skills/github',
+    ref: 'main',
+  }),
+});
+
+await api(`/skills/installed/${encodeURIComponent(installedSkill.name)}`, {
+  method: 'PATCH',
+  body: JSON.stringify({ enabled: true }),
+});
+```
+
+## List and activate saved profiles
+
+```js
+const profiles = await api('/profiles');
+console.log(profiles.active_profile, profiles.profiles);
+
+await api(`/profiles/${encodeURIComponent('gpt-5')}/activate`, {
+  method: 'POST',
+});
+```
+
+## Test an MCP server config before saving it
+
+```js
+const probe = await api('/mcp/test', {
+  method: 'POST',
+  body: JSON.stringify({
+    name: 'github',
+    server: {
+      type: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+    },
+    timeout: 15,
+  }),
+});
+
+if (!probe.ok) {
+  console.warn(`MCP validation failed: ${probe.error_kind} ${probe.error}`);
+} else {
+  console.log('MCP tools', probe.tools);
+}
+```
+
+
 ## Search conversations
 
 ```js
@@ -101,6 +314,66 @@ console.log(page.items, page.next_page_id);
 const conversation = await api(`/conversations/${conversationId}`);
 console.log(conversation.execution_status);
 ```
+
+If the UI truly needs the full inlined skill payload, opt in explicitly:
+
+```js
+const conversationWithSkills = await api(
+  `/conversations/${conversationId}?include_skills=true`,
+);
+console.log(conversationWithSkills.agent.agent_context.skills);
+```
+
+
+## Ask the agent a side question without mutating history
+
+```js
+const answer = await api(`/conversations/${conversationId}/ask_agent`, {
+  method: 'POST',
+  body: JSON.stringify({
+    question: 'Summarize the current plan in one sentence.',
+  }),
+});
+
+console.log(answer.response);
+```
+
+## Read the agent's final response summary
+
+```js
+const finalResponse = await api(
+  `/conversations/${conversationId}/agent_final_response`,
+);
+console.log(finalResponse.response);
+```
+
+## Switch a conversation to a saved profile
+
+```js
+await api(`/conversations/${conversationId}/switch_profile`, {
+  method: 'POST',
+  body: JSON.stringify({ profile_name: 'gpt-5' }),
+});
+```
+
+## Same-origin proxy to OpenHands Cloud
+
+```js
+const me = await api('/cloud-proxy', {
+  method: 'POST',
+  body: JSON.stringify({
+    host: 'https://app.all-hands.dev',
+    method: 'GET',
+    path: '/api/user',
+    headers: {
+      Authorization: `Bearer ${cloudToken}`,
+    },
+  }),
+});
+
+console.log(me);
+```
+
 
 ## Create a conversation for a trusted internal UI
 
@@ -186,6 +459,14 @@ await api(`/conversations/${conversationId}/events`, {
 });
 ```
 
+## Interrupt immediately
+
+```js
+await api(`/conversations/${conversationId}/interrupt`, { method: 'POST' });
+```
+
+Use `/interrupt` when the UI needs to cancel an in-flight run right away. `/pause` is cooperative and takes effect once the current work yields control.
+
 ## Pause and resume
 
 ```js
@@ -223,6 +504,16 @@ async function uploadFile(file, absolutePath) {
 ```
 
 Do not manually set `Content-Type` for `FormData`.
+
+## Check VS Code launcher availability
+
+```js
+const vscodeStatus = await api('/vscode/status');
+if (vscodeStatus.enabled && vscodeStatus.running) {
+  const { url } = await api('/vscode/url');
+  console.log('open vscode at', url);
+}
+```
 
 ## Execute a bash command through REST
 

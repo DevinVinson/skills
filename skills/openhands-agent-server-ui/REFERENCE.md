@@ -34,6 +34,30 @@ Before writing UI logic, inspect the live server:
 - `GET /openapi.json` — machine-readable schema
 - `GET /api/tools/` — currently registered tool names
 
+If you expect a richer admin or workspace-management UI, also inspect:
+
+- `POST /api/skills` — merged skill inventory for the workspace
+- `POST /api/skills/sync` — force-refresh the public skill catalog cache from the configured source
+- `GET /api/skills/marketplace` — installable marketplace catalog with installation status
+- `POST /api/skills/install` — install a skill into `~/.openhands/skills/installed/`
+- `GET /api/skills/installed` and `GET /api/skills/installed/{skill_name}` — installed-skill inventory and detail
+- `PATCH /api/skills/installed/{skill_name}` and `POST /api/skills/installed/{skill_name}/refresh` — enable/disable or refresh an installed skill
+- `DELETE /api/skills/installed/{skill_name}` — uninstall a skill
+- `POST /api/hooks` — project hook configuration
+- `GET /api/profiles`, `GET /api/profiles/{name}`, `POST /api/profiles/{name}`, and `POST /api/profiles/{name}/activate` — optional profile-management UI
+- `POST /api/mcp/test` — validate one MCP server config before persisting it
+- `POST /api/cloud-proxy` — same-origin proxy to allowlisted OpenHands Cloud hosts
+- `POST /api/auth/workspace-session` and `DELETE /api/auth/workspace-session` — mint or clear the workspace cookie used for browser embeds
+- `GET /api/file/home` — server home directory for file pickers
+- `GET /api/file/search_subdirs` — paged directory search for workspace pickers
+- `GET /api/workspaces`, `POST /api/workspaces`, `DELETE /api/workspaces`, `POST /api/workspaces/parents`, and `DELETE /api/workspaces/parents` — persist shared workspace shortcuts and parent folders on the server
+- `GET /api/git/changes` and `GET /api/git/diff` — optional changes views
+- `GET /api/llm/providers`, `GET /api/llm/models`, and `GET /api/llm/models/verified` — optional model pickers
+- `GET /api/conversations/{conversation_id}/workspace` and `GET /api/conversations/{conversation_id}/workspace/{file_path:path}` — serve workspace HTML/assets for embeds
+- `GET /api/vscode/url`, `GET /api/vscode/status`, and `GET /api/desktop/url` — optional editor or desktop launch surfaces
+
+Record `/server_info.version` early and decide whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. Handle compatibility explicitly instead of trying to infer partial support.
+
 If the running server and repository docs differ, trust the live server contract first.
 
 ## Base URL patterns
@@ -48,6 +72,15 @@ If the running server and repository docs differ, trust the live server contract
 - REST base: `${SERVER_ORIGIN}/api`
 - WebSocket base: `${SERVER_ORIGIN}` with `http` replaced by `ws`
 - Cross-origin deployments require the server to allow the frontend origin via CORS.
+
+### Proxy or path-prefix deployments
+
+If the server is exposed behind a shared ingress prefix such as `/runtime/55313`, preserve that prefix for both REST and WebSocket URLs:
+
+- REST base: `${SERVER_ORIGIN}/runtime/55313/api`
+- WebSocket base: `${SERVER_ORIGIN}` with `http` replaced by `ws`, then append `/runtime/55313`
+
+Do not derive WebSocket URLs from host alone in these deployments. Preserve the same path prefix used for `/api`.
 
 ## Authentication
 
@@ -73,6 +106,16 @@ Legacy fallbacks exist but are not the preferred browser path:
 
 - `session_api_key` query parameter
 - `X-Session-API-Key` WebSocket header for non-browser clients
+
+### Workspace artifacts and embedded HTML
+
+The server has a narrower cookie-based auth path for browser embeds that cannot attach custom headers, such as `<iframe src>` and `<img src>` requests.
+
+- `POST /api/auth/workspace-session` mints a workspace session cookie after validating the `X-Session-API-Key` header and returns `204 No Content`.
+- `DELETE /api/auth/workspace-session` clears that cookie and also returns `204 No Content`.
+- The cookie is honored only by the workspace static-file routes under `/api/conversations/{conversation_id}/workspace...`.
+- The cookie is scoped to `/api/conversations`, marked `HttpOnly`, and uses `SameSite=None`; the server adds `Secure` and `Partitioned` when the request context allows it.
+- The rest of `/api` remains header-only to keep the broader CSRF surface closed.
 
 ## Key response shapes
 
@@ -112,6 +155,9 @@ Important UI fields often include:
 }
 ```
 
+Conversation search/get/start/fork responses trim `agent.agent_context.skills` to `[]` by default. Only request `?include_skills=true` if the UI truly needs the legacy full payload.
+
+
 ### Event shape
 
 Event history and event WebSockets emit serialized event objects with fields such as:
@@ -148,17 +194,42 @@ The simplest write path is:
 - `GET /ready`
 - `GET /server_info`
 - `GET /api/tools/`
+- `POST /api/skills`
+- `POST /api/skills/sync`
+- `GET /api/skills/marketplace`
+- `POST /api/skills/install`
+- `GET /api/skills/installed`
+- `GET /api/skills/installed/{skill_name}`
+- `PATCH /api/skills/installed/{skill_name}`
+- `DELETE /api/skills/installed/{skill_name}`
+- `POST /api/skills/installed/{skill_name}/refresh`
+- `POST /api/hooks`
+- `GET /api/profiles`
+- `GET /api/profiles/{name}`
+- `POST /api/profiles/{name}`
+- `DELETE /api/profiles/{name}`
+- `POST /api/profiles/{name}/rename`
+- `POST /api/profiles/{name}/activate`
+- `POST /api/mcp/test`
+- `POST /api/cloud-proxy`
+- `POST /api/auth/workspace-session`
+- `DELETE /api/auth/workspace-session`
+- `GET /api/llm/providers`
+- `GET /api/llm/models`
+- `GET /api/llm/models/verified`
 
 ### Conversations
 
 - `GET /api/conversations/search?page_id=<cursor>&limit=100&status=<status>&sort_order=<order>`
 - `GET /api/conversations/count`
 - `GET /api/conversations/{conversation_id}`
+- `GET /api/conversations?ids=<uuid>&ids=<uuid>`
 - `POST /api/conversations`
 - `PATCH /api/conversations/{conversation_id}`
 - `DELETE /api/conversations/{conversation_id}`
 - `POST /api/conversations/{conversation_id}/run`
 - `POST /api/conversations/{conversation_id}/pause`
+- `POST /api/conversations/{conversation_id}/interrupt`
 - `POST /api/conversations/{conversation_id}/fork`
 - `POST /api/conversations/{conversation_id}/condense`
 - `GET /api/conversations/{conversation_id}/agent_final_response`
@@ -174,12 +245,14 @@ Important notes:
 - `POST /api/conversations` returns full `ConversationInfo`, not only an ID.
 - If the client wants to choose the ID, the field is `conversation_id`, not `id`.
 - There is **no dedicated resume endpoint**. To start or resume execution, call `POST /api/conversations/{conversation_id}/run`.
+- `POST /api/conversations/{conversation_id}/interrupt` is the immediate cancel path for an in-flight run; `POST /pause` pauses the conversation loop after the current work yields control.
 
 ### Events
 
 - `GET /api/conversations/{conversation_id}/events/search`
 - `GET /api/conversations/{conversation_id}/events/count`
 - `GET /api/conversations/{conversation_id}/events/{event_id}`
+- `GET /api/conversations/{conversation_id}/events?event_ids=<id>&event_ids=<id>`
 - `POST /api/conversations/{conversation_id}/events`
 - `POST /api/conversations/{conversation_id}/events/respond_to_confirmation`
 
@@ -194,18 +267,38 @@ Useful filters on event search include:
 - `timestamp__gte`
 - `timestamp__lt`
 
-### File transfer
+### Files and workspace helpers
 
 - `POST /api/file/upload?path=/absolute/path/in/workspace.txt`
 - `GET /api/file/download?path=/absolute/path/in/workspace.txt`
 - `GET /api/file/download-trajectory/{conversation_id}`
+- `GET /api/file/home`
+- `GET /api/file/search_subdirs?path=/absolute/path&limit=100&page_id=<cursor>`
+- `GET /api/conversations/{conversation_id}/workspace`
+- `GET /api/conversations/{conversation_id}/workspace/{file_path:path}`
 
-Paths must be absolute.
+Paths must be absolute for the `/api/file/*` helpers. The `/api/conversations/{conversation_id}/workspace...` routes are static-file serving routes rooted at that conversation's local workspace.
+
+### Saved workspaces
+
+- `GET /api/workspaces`
+- `POST /api/workspaces`
+- `DELETE /api/workspaces?path=/absolute/workspace/path`
+- `POST /api/workspaces/parents`
+- `DELETE /api/workspaces/parents?path=/absolute/parent/path`
+
+Important notes:
+
+- `GET /api/workspaces` returns both `workspaces` and `workspaceParents`.
+- Workspace items use `parentPath` in JSON when a parent folder is present.
+- The POST endpoints are idempotent and de-duplicate by `path`.
+- Use `/api/file/home` and `/api/file/search_subdirs` to browse filesystem choices, then persist reusable shortcuts with `/api/workspaces...` so every client connected to the same server sees the same saved list.
 
 ### Bash / terminal endpoints
 
 - `GET /api/bash/bash_events/search`
 - `GET /api/bash/bash_events/{event_id}`
+- `GET /api/bash/bash_events/`
 - `POST /api/bash/start_bash_command`
 - `POST /api/bash/execute_bash_command`
 - `DELETE /api/bash/bash_events`
@@ -220,6 +313,16 @@ Useful request shape:
 }
 ```
 
+### Git, editor, and desktop helpers
+
+- `GET /api/git/changes?path=/absolute/path/to/repo`
+- `GET /api/git/diff?path=/absolute/path/to/file/or/repo`
+- `GET /api/vscode/url?base_url=<optional-browser-base>`
+- `GET /api/vscode/status`
+- `GET /api/desktop/url?base_url=<optional-browser-base>`
+
+`/api/vscode/status` is a lightweight capability check for whether a VS Code bridge is available before rendering an "Open in VS Code" action.
+
 ### Settings endpoints
 
 Useful for admin or advanced configuration UIs:
@@ -229,9 +332,82 @@ Useful for admin or advanced configuration UIs:
 - `GET /api/settings/agent-schema`
 - `GET /api/settings/conversation-schema`
 - `GET /api/settings/secrets`
-- `POST /api/settings/secrets`
+- `PUT /api/settings/secrets`
 - `GET /api/settings/secrets/{name}`
 - `DELETE /api/settings/secrets/{name}`
+
+### Profiles endpoints
+
+Useful for profile pickers or trusted internal model-management UIs:
+
+- `GET /api/profiles`
+- `GET /api/profiles/{name}`
+- `POST /api/profiles/{name}`
+- `DELETE /api/profiles/{name}`
+- `POST /api/profiles/{name}/rename`
+- `POST /api/profiles/{name}/activate`
+
+Important notes:
+
+- `GET /api/profiles` returns both a `profiles` array and an `active_profile` field.
+- `GET /api/profiles/{name}` defaults to a browser-safer shape where `config.api_key` is `null` and `api_key_set` indicates whether a secret exists.
+- `GET /api/profiles/{name}` also supports `X-Expose-Secrets: encrypted` or `plaintext`, mirroring the settings secret-exposure patterns.
+- `POST /api/profiles/{name}` saves or overwrites the named profile from a request body shaped like `{ "llm": { ... }, "include_secrets": true }`.
+- `POST /api/profiles/{name}/activate` applies the stored LLM config to current agent settings and records that name as `active_profile`.
+
+### MCP and cloud proxy helpers
+
+Useful for browser-based settings or cloud-connected UIs:
+
+- `POST /api/mcp/test`
+- `POST /api/cloud-proxy`
+
+Important notes:
+
+- `POST /api/mcp/test` validates one candidate MCP server config without persisting it.
+- `POST /api/mcp/test` returns HTTP 200 for both success and expected validation failures; use the JSON body's `ok` flag and `error_kind` instead of treating non-2xx status as the only failure signal.
+- `POST /api/cloud-proxy` forwards a same-origin browser request to an allowlisted OpenHands Cloud host using a body shaped like `{ "host": "https://app.all-hands.dev", "method": "GET", "path": "/api/...", "headers": { ... }, "body": ..., "timeout_seconds": 15 }`.
+- The cloud proxy is intentionally constrained to allowed SaaS hosts; it is not a generic outbound proxy.
+
+### Skills and hooks request shapes
+
+Typical request bodies:
+
+```json
+{
+  "load_public": true,
+  "load_user": true,
+  "load_project": true,
+  "load_org": false,
+  "project_dir": "/workspace/project"
+}
+```
+
+```json
+{
+  "project_dir": "/workspace/project"
+}
+```
+
+Use the active conversation's `workspace.working_dir` when you want skills or hooks for that workspace instead of a generic server default.
+
+Installed-skill management uses separate request bodies:
+
+```json
+{
+  "source": "github:OpenHands/extensions/skills/github",
+  "ref": "main",
+  "force": false
+}
+```
+
+```json
+{
+  "enabled": true
+}
+```
+
+Useful installed-skill response fields include `name`, `enabled`, `source`, `resolved_ref`, `installed_at`, and `install_path`. The marketplace catalog returns available skills plus installation status so a UI can render install or update actions without re-deriving that state.
 
 ## WebSocket API
 
@@ -328,10 +504,23 @@ When refreshing this reference, inspect these files first:
 - `openhands-agent-server/openhands/agent_server/bash_router.py`
 - `openhands-agent-server/openhands/agent_server/server_details_router.py`
 - `openhands-agent-server/openhands/agent_server/settings_router.py`
+- `openhands-agent-server/openhands/agent_server/skills_router.py`
+- `openhands-agent-server/openhands/agent_server/hooks_router.py`
+- `openhands-agent-server/openhands/agent_server/profiles_router.py`
+- `openhands-agent-server/openhands/agent_server/mcp_router.py`
+- `openhands-agent-server/openhands/agent_server/cloud_proxy_router.py`
+- `openhands-agent-server/openhands/agent_server/git_router.py`
+- `openhands-agent-server/openhands/agent_server/vscode_router.py`
+- `openhands-agent-server/openhands/agent_server/desktop_router.py`
+- `openhands-agent-server/openhands/agent_server/llm_router.py`
 
-Helpful implementation references:
+Also check the current browser-facing examples in `software-agent-sdk`:
 
+- `scripts/agent_server_ui/static/index.html`
 - `scripts/agent_server_ui/static/app.js`
 - `scripts/websocket_client.html`
+- `examples/02_remote_agent_server/11_conversation_fork.py`
+- `examples/02_remote_agent_server/12_settings_and_secrets_api.py`
+- `examples/02_remote_agent_server/13_workspace_get_llm.py`
 
 Treat those client-side examples as implementation inspiration, not as a stronger source of truth than the current router code or live OpenAPI schema.
