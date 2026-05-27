@@ -141,7 +141,7 @@ When detected:
 ## Example Openings
 
 **New day after a weekend or gap:**
-> "Good morning! I created today's daily note and found your last note from Friday, 2026-04-24. You still had 3 open todo items in the main Todo section. Which of these are still active today?"
+> "Good morning! I created today's daily note and found your last note from Friday, YYYY-MM-DD. You still had 3 open todo items in the main Todo section. Which of these are still active today?"
 
 **Returning to an existing day:**
 > "Welcome back! I see 2 open items and 4 completed items in today's Todo section. What changed since the last check-in?"
