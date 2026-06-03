@@ -18,6 +18,7 @@ Each skill lives in its own directory and usually includes a primary `SKILL.md`.
 - [`standup`](./skills/standup/SKILL.md) — daily standup and task carryover workflow
 - [`openhands-agent-server-ui`](./skills/openhands-agent-server-ui/SKILL.md) — reference skill for building browser UIs against a running OpenHands agent-server
 - [`openhands-design`](./skills/openhands-design/SKILL.md) — reference skill for implementing or restyling UI to match the OpenHands design system
+- [`use-git-worktrees`](./skills/use-git-worktrees/SKILL.md) — use Git worktrees confidently for agent coding tasks
 
 ## Structure
 
@@ -28,6 +29,10 @@ skills/
     REFERENCE.md   # optional
     EXAMPLES.md    # optional
 ```
+
+## Skills audit
+
+See [`SKILLS_AUDIT.md`](./SKILLS_AUDIT.md) for a usage audit of skills across recent OpenHands conversations, with recommendations for which public skills to migrate into this repo.
 
 ## Notes
 
