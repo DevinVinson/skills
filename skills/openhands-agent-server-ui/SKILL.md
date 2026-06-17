@@ -27,7 +27,7 @@ It is **not** a pattern for public, anonymous, or multi-tenant browser deploymen
 ## First principles
 
 - Trust the running server's `/docs` and `/openapi.json` first if there is any contract drift.
-- Use `/server_info`, `/api/tools/`, and, when relevant, `/api/skills`, `/api/hooks`, `/api/profiles`, `/api/workspaces`, and `/api/mcp/test` to adapt to the deployment you actually have.
+- Use `/server_info`, `/api/tools/`, and, when relevant, `/api/skills`, `/api/hooks`, `/api/profiles`, `/api/workspaces`, `/api/mcp/test`, and `/v1/models` to adapt to the deployment you actually have.
 - Keep raw event objects and render by `kind` instead of flattening everything into plain strings.
 - Prefer REST for writes and initial reads, and WebSocket for live updates.
 - Do not assume the server is always mounted at the origin root. Reverse proxies may expose `/api` and `/sockets` under a shared path prefix.
@@ -64,9 +64,10 @@ If you want richer admin or workspace-management surfaces, also inspect these op
 - `GET /api/profiles`
 - `GET /api/profiles/{name}`
 - `POST /api/profiles/{name}`
+- `DELETE /api/profiles/{name}`
+- `POST /api/profiles/{name}/rename`
 - `POST /api/profiles/{name}/activate`
 - `POST /api/mcp/test`
-- `POST /api/cloud-proxy`
 - `POST /api/auth/workspace-session`
 - `DELETE /api/auth/workspace-session`
 - `GET /api/file/home`
@@ -125,9 +126,10 @@ Only add these when the product actually needs them:
 - installed-skill or marketplace UI via `/api/skills/marketplace`, `/api/skills/install`, and `/api/skills/installed...`
 - profile management via `/api/profiles...`
 - MCP configuration validation via `POST /api/mcp/test`
-- same-origin cloud forwarding via `POST /api/cloud-proxy`
 - git changes or diff panels via `/api/git/changes` and `/api/git/diff`
 - model or provider pickers via `/api/llm/providers`, `/api/llm/models`, and `/api/llm/models/verified`
+- LLM subscription login flows via `/api/llm/subscription/openai/...`
+- OpenAI-compatible gateway via `GET /v1/models` and `POST /v1/chat/completions`
 - VS Code or desktop launchers via `/api/vscode/url`, `/api/vscode/status`, and `/api/desktop/url`
 - bash or terminal panel
 - settings/admin panels
@@ -167,11 +169,12 @@ When updating this skill, re-check these sources in `software-agent-sdk`:
 - `openhands-agent-server/openhands/agent_server/hooks_router.py`
 - `openhands-agent-server/openhands/agent_server/profiles_router.py`
 - `openhands-agent-server/openhands/agent_server/mcp_router.py`
-- `openhands-agent-server/openhands/agent_server/cloud_proxy_router.py`
+- `openhands-agent-server/openhands/agent_server/tool_router.py`
 - `openhands-agent-server/openhands/agent_server/git_router.py`
 - `openhands-agent-server/openhands/agent_server/vscode_router.py`
 - `openhands-agent-server/openhands/agent_server/desktop_router.py`
 - `openhands-agent-server/openhands/agent_server/llm_router.py`
+- `openhands-agent-server/openhands/agent_server/openai/router.py`
 - `openhands-agent-server/openhands/agent_server/models.py`
 - `openhands-agent-server/openhands/agent_server/openapi.py`
 - `openhands-agent-server/openhands/agent_server/workspace_router.py`
@@ -184,5 +187,7 @@ Also re-check the current browser-facing examples in `software-agent-sdk`:
 - `examples/02_remote_agent_server/11_conversation_fork.py`
 - `examples/02_remote_agent_server/12_settings_and_secrets_api.py`
 - `examples/02_remote_agent_server/13_workspace_get_llm.py`
+- `examples/02_remote_agent_server/14_client_defined_tools.py`
+- `examples/02_remote_agent_server/15_openai_compatible_gateway.py`
 
 If repo docs, examples, and the running server disagree, prefer the running server's `/docs` and `/openapi.json`, then the current router source.

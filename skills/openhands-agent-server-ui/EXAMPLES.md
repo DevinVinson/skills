@@ -356,25 +356,6 @@ await api(`/conversations/${conversationId}/switch_profile`, {
 });
 ```
 
-## Same-origin proxy to OpenHands Cloud
-
-```js
-const me = await api('/cloud-proxy', {
-  method: 'POST',
-  body: JSON.stringify({
-    host: 'https://app.all-hands.dev',
-    method: 'GET',
-    path: '/api/user',
-    headers: {
-      Authorization: `Bearer ${cloudToken}`,
-    },
-  }),
-});
-
-console.log(me);
-```
-
-
 ## Create a conversation for a trusted internal UI
 
 Use this only when the browser UI is inside the same trust boundary as the server and can legitimately handle provider credentials, such as a local machine or authenticated internal workspace.

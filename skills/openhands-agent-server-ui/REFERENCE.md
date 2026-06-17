@@ -44,9 +44,8 @@ If you expect a richer admin or workspace-management UI, also inspect:
 - `PATCH /api/skills/installed/{skill_name}` and `POST /api/skills/installed/{skill_name}/refresh` — enable/disable or refresh an installed skill
 - `DELETE /api/skills/installed/{skill_name}` — uninstall a skill
 - `POST /api/hooks` — project hook configuration
-- `GET /api/profiles`, `GET /api/profiles/{name}`, `POST /api/profiles/{name}`, and `POST /api/profiles/{name}/activate` — optional profile-management UI
+- `GET /api/profiles`, `GET /api/profiles/{name}`, `POST /api/profiles/{name}`, `DELETE /api/profiles/{name}`, `POST /api/profiles/{name}/rename`, and `POST /api/profiles/{name}/activate` — optional profile-management UI
 - `POST /api/mcp/test` — validate one MCP server config before persisting it
-- `POST /api/cloud-proxy` — same-origin proxy to allowlisted OpenHands Cloud hosts
 - `POST /api/auth/workspace-session` and `DELETE /api/auth/workspace-session` — mint or clear the workspace cookie used for browser embeds
 - `GET /api/file/home` — server home directory for file pickers
 - `GET /api/file/search_subdirs` — paged directory search for workspace pickers
@@ -211,7 +210,6 @@ The simplest write path is:
 - `POST /api/profiles/{name}/rename`
 - `POST /api/profiles/{name}/activate`
 - `POST /api/mcp/test`
-- `POST /api/cloud-proxy`
 - `POST /api/auth/workspace-session`
 - `DELETE /api/auth/workspace-session`
 - `GET /api/llm/providers`
@@ -239,6 +237,7 @@ The simplest write path is:
 - `POST /api/conversations/{conversation_id}/security_analyzer`
 - `POST /api/conversations/{conversation_id}/switch_profile`
 - `POST /api/conversations/{conversation_id}/switch_llm`
+- `POST /api/conversations/{conversation_id}/switch_acp_model`
 
 Important notes:
 
@@ -355,19 +354,35 @@ Important notes:
 - `POST /api/profiles/{name}` saves or overwrites the named profile from a request body shaped like `{ "llm": { ... }, "include_secrets": true }`.
 - `POST /api/profiles/{name}/activate` applies the stored LLM config to current agent settings and records that name as `active_profile`.
 
-### MCP and cloud proxy helpers
-
-Useful for browser-based settings or cloud-connected UIs:
+### MCP helper
 
 - `POST /api/mcp/test`
-- `POST /api/cloud-proxy`
 
 Important notes:
 
 - `POST /api/mcp/test` validates one candidate MCP server config without persisting it.
 - `POST /api/mcp/test` returns HTTP 200 for both success and expected validation failures; use the JSON body's `ok` flag and `error_kind` instead of treating non-2xx status as the only failure signal.
-- `POST /api/cloud-proxy` forwards a same-origin browser request to an allowlisted OpenHands Cloud host using a body shaped like `{ "host": "https://app.all-hands.dev", "method": "GET", "path": "/api/...", "headers": { ... }, "body": ..., "timeout_seconds": 15 }`.
-- The cloud proxy is intentionally constrained to allowed SaaS hosts; it is not a generic outbound proxy.
+
+### LLM subscription endpoints
+
+For UIs that support ChatGPT subscription (Plus/Pro) login flows:
+
+- `GET /api/llm/subscription/openai/models`
+- `GET /api/llm/subscription/openai/status`
+- `POST /api/llm/subscription/openai/device/start`
+- `POST /api/llm/subscription/openai/device/poll`
+- `POST /api/llm/subscription/openai/logout`
+
+The device-login flow starts with `POST .../device/start` (returns a `user_code` and `verification_uri` for the user to visit), then polls `POST .../device/poll` until the login succeeds or times out. `GET .../status` returns safe connection state without tokens.
+
+### OpenAI-compatible gateway
+
+These routes live at the server root, **not** under `/api`:
+
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+
+They expose an OpenAI-compatible chat completions interface backed by the agent server. Useful for integrating with tools or clients that speak the OpenAI protocol.
 
 ### Skills and hooks request shapes
 
@@ -508,11 +523,15 @@ When refreshing this reference, inspect these files first:
 - `openhands-agent-server/openhands/agent_server/hooks_router.py`
 - `openhands-agent-server/openhands/agent_server/profiles_router.py`
 - `openhands-agent-server/openhands/agent_server/mcp_router.py`
-- `openhands-agent-server/openhands/agent_server/cloud_proxy_router.py`
+- `openhands-agent-server/openhands/agent_server/tool_router.py`
+- `openhands-agent-server/openhands/agent_server/auth_router.py`
+- `openhands-agent-server/openhands/agent_server/workspace_router.py`
+- `openhands-agent-server/openhands/agent_server/workspaces_router.py`
 - `openhands-agent-server/openhands/agent_server/git_router.py`
 - `openhands-agent-server/openhands/agent_server/vscode_router.py`
 - `openhands-agent-server/openhands/agent_server/desktop_router.py`
 - `openhands-agent-server/openhands/agent_server/llm_router.py`
+- `openhands-agent-server/openhands/agent_server/openai/router.py`
 
 Also check the current browser-facing examples in `software-agent-sdk`:
 
@@ -522,5 +541,7 @@ Also check the current browser-facing examples in `software-agent-sdk`:
 - `examples/02_remote_agent_server/11_conversation_fork.py`
 - `examples/02_remote_agent_server/12_settings_and_secrets_api.py`
 - `examples/02_remote_agent_server/13_workspace_get_llm.py`
+- `examples/02_remote_agent_server/14_client_defined_tools.py`
+- `examples/02_remote_agent_server/15_openai_compatible_gateway.py`
 
 Treat those client-side examples as implementation inspiration, not as a stronger source of truth than the current router code or live OpenAPI schema.
