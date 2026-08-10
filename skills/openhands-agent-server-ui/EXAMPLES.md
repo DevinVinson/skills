@@ -142,6 +142,39 @@ if (compareSemver(serverInfo.version, minimumSupportedVersion) < 0) {
 console.log(serverInfo.usable_tools);
 ```
 
+## Check deferred-init status
+
+Most UIs only need to detect this state and show that the runtime is starting. The trusted orchestrator, not an ordinary browser user, should normally call `POST /api/init`.
+
+```js
+async function getInitStatus() {
+  const response = await fetch(`${apiBaseUrl}/init`);
+  if (response.status === 404) return { state: 'not_configured' };
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
+const initStatus = await getInitStatus();
+if (initStatus.state === 'dormant' || initStatus.state === 'initializing') {
+  console.log('runtime is starting', initStatus);
+}
+```
+
+```js
+async function initializeDormantServer(initApiKey, payload) {
+  const response = await fetch(`${apiBaseUrl}/init`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Init-API-Key': initApiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+```
+
 ## Connect to the conversation events socket
 
 This example assumes the session API key is being supplied by a trusted local or authenticated environment.
@@ -238,6 +271,26 @@ const skills = await api('/skills', {
 console.log(skills.skills.map((skill) => skill.name));
 ```
 
+## Load sub-agents for a workspace
+
+```js
+const subAgents = await api('/sub-agents', {
+  method: 'POST',
+  body: JSON.stringify({
+    load_user: true,
+    load_project: true,
+    load_builtin: true,
+    project_dir: projectDir,
+  }),
+});
+
+console.log(subAgents.agents.map((agent) => ({
+  name: agent.name,
+  builtin: agent.is_builtin,
+  tools: agent.tools,
+})));
+```
+
 ## Inspect marketplace skills
 
 ```js
@@ -266,6 +319,42 @@ await api(`/skills/installed/${encodeURIComponent(installedSkill.name)}`, {
 });
 ```
 
+## Inspect, install, and load a plugin
+
+```js
+const plugins = await api('/plugins', {
+  method: 'POST',
+  body: JSON.stringify({
+    load_user: true,
+    load_project: true,
+    project_dir: projectDir,
+  }),
+});
+console.log(plugins.plugins.map((plugin) => plugin.name));
+
+const marketplacePlugins = await api('/plugins/marketplace');
+console.log(marketplacePlugins.plugins.map((plugin) => ({
+  name: plugin.name,
+  installed: plugin.installed,
+  source: plugin.source,
+  repoPath: plugin.repo_path,
+})));
+
+const installedPlugin = await api('/plugins/install', {
+  method: 'POST',
+  body: JSON.stringify({
+    source: 'github:OpenHands/extensions/plugins/city-weather',
+    ref: 'main',
+    force: false,
+  }),
+});
+
+await api(`/conversations/${conversationId}/load_plugin`, {
+  method: 'POST',
+  body: JSON.stringify({ plugin_ref: installedPlugin.name }),
+});
+```
+
 ## List and activate saved profiles
 
 ```js
@@ -275,6 +364,31 @@ console.log(profiles.active_profile, profiles.profiles);
 await api(`/profiles/${encodeURIComponent('gpt-5')}/activate`, {
   method: 'POST',
 });
+```
+
+## List, materialize, and activate agent profiles
+
+Agent profiles are separate from LLM profiles. Activation uses the profile's stable `id` and only updates the active pointer.
+
+```js
+const agentProfiles = await api('/agent-profiles');
+console.log(agentProfiles.active_agent_profile_id, agentProfiles.profiles);
+
+const profileName = agentProfiles.profiles[0]?.name;
+if (profileName) {
+  const diagnostics = await api(
+    `/agent-profiles/${encodeURIComponent(profileName)}/materialize`,
+    { method: 'POST' },
+  );
+  console.log(diagnostics.valid, diagnostics);
+}
+
+const profileId = agentProfiles.profiles[0]?.id;
+if (profileId) {
+  await api(`/agent-profiles/${encodeURIComponent(profileId)}/activate`, {
+    method: 'POST',
+  });
+}
 ```
 
 ## Test an MCP server config before saving it
@@ -298,6 +412,39 @@ if (!probe.ok) {
 } else {
   console.log('MCP tools', probe.tools);
 }
+```
+
+## Run MCP OAuth setup
+
+Use this when an MCP config uses OAuth. The callback URL should be the final localhost redirect URL from the OAuth browser flow.
+
+```js
+const started = await api('/mcp/oauth/start', {
+  method: 'POST',
+  body: JSON.stringify({
+    name: 'oauth-server',
+    server: {
+      type: 'http',
+      url: 'https://mcp.example.com/mcp',
+      auth: { strategy: 'oauth2' },
+    },
+    timeout: 15,
+  }),
+});
+
+if (started.ok) {
+  window.open(started.authorization_url, '_blank', 'noopener,noreferrer');
+}
+
+const status = await api(`/mcp/oauth/status/${encodeURIComponent(started.job_id)}`);
+console.log(status.status, status.ok);
+
+await api(`/mcp/oauth/callback/${encodeURIComponent(started.job_id)}`, {
+  method: 'POST',
+  body: JSON.stringify({
+    callback_url: 'http://localhost:12345/callback?code=...',
+  }),
+});
 ```
 
 
@@ -353,6 +500,41 @@ console.log(finalResponse.response);
 await api(`/conversations/${conversationId}/switch_profile`, {
   method: 'POST',
   body: JSON.stringify({ profile_name: 'gpt-5' }),
+});
+```
+
+## Start, stop, and resume a goal loop
+
+```js
+await api(`/conversations/${conversationId}/goal`, {
+  method: 'POST',
+  body: JSON.stringify({
+    objective: 'Finish the remaining implementation and verify it.',
+    max_iterations: 5,
+  }),
+});
+
+await api(`/conversations/${conversationId}/goal/stop`, { method: 'POST' });
+await api(`/conversations/${conversationId}/goal/resume`, { method: 'POST' });
+```
+
+## Navigate a conversation branch to an event
+
+```js
+const updatedConversation = await api(`/conversations/${conversationId}/navigate`, {
+  method: 'POST',
+  body: JSON.stringify({ event_id: targetEventId }),
+});
+
+console.log(updatedConversation.leaf_event_id);
+```
+
+## Switch an ACP conversation model
+
+```js
+await api(`/conversations/${conversationId}/switch_acp_model`, {
+  method: 'POST',
+  body: JSON.stringify({ model: 'gpt-5.5' }),
 });
 ```
 
@@ -424,6 +606,32 @@ const response = await api('/conversations', {
       run: true,
     },
   }),
+});
+```
+
+## Patch one MCP server in settings
+
+Use these endpoints when a settings UI needs to update one MCP server without replacing the whole `mcp_config` object.
+
+```js
+await api(`/settings/mcp/${encodeURIComponent('github')}`, {
+  method: 'POST',
+  body: JSON.stringify({
+    transport: 'stdio',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-github'],
+  }),
+});
+
+await api(`/settings/mcp/${encodeURIComponent('github')}`, {
+  method: 'PATCH',
+  body: JSON.stringify({
+    env: { GITHUB_TOKEN: '<trusted-only-token>' },
+  }),
+});
+
+await api(`/settings/mcp/${encodeURIComponent('github')}`, {
+  method: 'DELETE',
 });
 ```
 
@@ -534,4 +742,82 @@ function connectBashEvents() {
 
   return ws;
 }
+```
+
+## List commits and archive a workspace
+
+```js
+const commits = await api(
+  `/git/commits?path=${encodeURIComponent('/workspace/project')}&limit=20`,
+);
+console.log(commits.commits, commits.has_more);
+
+const changes = await api(
+  `/git/commits/${encodeURIComponent(commits.commits[0].sha)}/changes?path=${encodeURIComponent('/workspace/project')}`,
+);
+console.log(changes);
+
+const archiveResponse = await api(
+  `/file/archive?path=${encodeURIComponent('/workspace/project')}&format=tar.gz`,
+);
+const archiveBlob = await archiveResponse.blob();
+console.log(archiveBlob.size);
+```
+
+## Use OpenAI-compatible chat completions
+
+```js
+async function openAICompatibleChat(messages, existingConversationId = null) {
+  const modelsResponse = await fetch(`${apiBaseUrl.replace(/\/api$/, '')}/v1/models`, {
+    headers: { Authorization: `Bearer ${sessionApiKey}` },
+  });
+  if (!modelsResponse.ok) throw new Error(await modelsResponse.text());
+  const models = await modelsResponse.json();
+  const model = models.data[0]?.id;
+  if (!model) throw new Error('No OpenAI-compatible models are configured.');
+
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${sessionApiKey}`,
+  });
+  if (existingConversationId) {
+    headers.set('X-OpenHands-ServerConversation-ID', existingConversationId);
+  }
+
+  const response = await fetch(`${apiBaseUrl.replace(/\/api$/, '')}/v1/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+    }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+
+  return {
+    conversationId: response.headers.get('X-OpenHands-ServerConversation-ID'),
+    completion: await response.json(),
+  };
+}
+```
+
+## Start and poll OpenAI subscription sign-in
+
+```js
+const models = await api('/llm/subscription/openai/models');
+console.log(models.models);
+
+const signIn = await api('/llm/subscription/openai/device/start', {
+  method: 'POST',
+});
+
+console.log(signIn.user_code, signIn.verification_uri);
+
+const status = await api('/llm/subscription/openai/device/poll', {
+  method: 'POST',
+  body: JSON.stringify({ device_code: signIn.device_code }),
+});
+
+console.log(status.connected);
 ```

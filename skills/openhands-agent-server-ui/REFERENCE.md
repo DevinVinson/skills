@@ -17,7 +17,8 @@ A running OpenHands agent-server exposes three browser-facing surfaces:
 
 1. **REST under `/api`** for conversations, events, tools, files, settings, bash operations, and other control surfaces.
 2. **WebSockets under `/sockets`** for live conversation events and bash event streams.
-3. **Root/discovery routes** such as `/alive`, `/health`, `/ready`, `/server_info`, `/docs`, `/redoc`, and `/openapi.json`.
+3. **OpenAI-compatible REST under `/v1`** for clients that want `models` and `chat/completions` semantics.
+4. **Root/discovery routes** such as `/alive`, `/health`, `/ready`, `/server_info`, `/docs`, `/redoc`, and `/openapi.json`.
 
 If static files are mounted, `/` may redirect to `/static/` or `/static/index.html`. If static files are not mounted, `/` returns server info.
 
@@ -32,10 +33,12 @@ Before writing UI logic, inspect the live server:
 - `GET /docs` — interactive FastAPI docs
 - `GET /redoc` — ReDoc documentation
 - `GET /openapi.json` — machine-readable schema
+- `GET /api/init` — deferred-init status if the deployment uses warm-pool startup
 - `GET /api/tools/` — currently registered tool names
 
 If you expect a richer admin or workspace-management UI, also inspect:
 
+- `POST /api/init` — initialize a dormant warm-pool server with `X-Init-API-Key`
 - `POST /api/skills` — merged skill inventory for the workspace
 - `POST /api/skills/sync` — force-refresh the public skill catalog cache from the configured source
 - `GET /api/skills/marketplace` — installable marketplace catalog with installation status
@@ -43,21 +46,36 @@ If you expect a richer admin or workspace-management UI, also inspect:
 - `GET /api/skills/installed` and `GET /api/skills/installed/{skill_name}` — installed-skill inventory and detail
 - `PATCH /api/skills/installed/{skill_name}` and `POST /api/skills/installed/{skill_name}/refresh` — enable/disable or refresh an installed skill
 - `DELETE /api/skills/installed/{skill_name}` — uninstall a skill
+- `POST /api/plugins`, `GET /api/plugins/marketplace`, `POST /api/plugins/install`, and `/api/plugins/installed...` — plugin discovery, marketplace, and installed-plugin management
+- `POST /api/sub-agents` — read-only discovery for workspace/user/builtin delegate agents
 - `POST /api/hooks` — project hook configuration
 - `GET /api/profiles`, `GET /api/profiles/{name}`, `POST /api/profiles/{name}`, `DELETE /api/profiles/{name}`, `POST /api/profiles/{name}/rename`, and `POST /api/profiles/{name}/activate` — optional profile-management UI
+- `GET /api/agent-profiles`, `GET /api/agent-profiles/{name}`, `POST /api/agent-profiles/{name}`, `DELETE /api/agent-profiles/{name}`, `POST /api/agent-profiles/{name}/rename`, `POST /api/agent-profiles/{profile_id}/activate`, and `POST /api/agent-profiles/{name}/materialize` — optional agent launch-profile UI
 - `POST /api/mcp/test` — validate one MCP server config before persisting it
+- `POST /api/mcp/oauth/start`, `GET /api/mcp/oauth/status/{job_id}`, and `POST /api/mcp/oauth/callback/{job_id}` — MCP OAuth setup flow
 - `POST /api/auth/workspace-session` and `DELETE /api/auth/workspace-session` — mint or clear the workspace cookie used for browser embeds
 - `GET /api/file/home` — server home directory for file pickers
 - `GET /api/file/search_subdirs` — paged directory search for workspace pickers
+- `GET /api/file/archive` — archive a workspace directory as `git-delta` or `tar.gz`
 - `GET /api/workspaces`, `POST /api/workspaces`, `DELETE /api/workspaces`, `POST /api/workspaces/parents`, and `DELETE /api/workspaces/parents` — persist shared workspace shortcuts and parent folders on the server
-- `GET /api/git/changes` and `GET /api/git/diff` — optional changes views
-- `GET /api/llm/providers`, `GET /api/llm/models`, and `GET /api/llm/models/verified` — optional model pickers
+- `GET /api/git/changes`, `GET /api/git/diff`, `GET /api/git/commits`, and `GET /api/git/commits/{sha}/changes` — optional changes and history views
+- `GET /api/llm/providers`, `GET /api/llm/models`, `GET /api/llm/models/verified`, and `/api/llm/subscription/openai...` — optional model pickers and ChatGPT subscription auth
 - `GET /api/conversations/{conversation_id}/workspace` and `GET /api/conversations/{conversation_id}/workspace/{file_path:path}` — serve workspace HTML/assets for embeds
 - `GET /api/vscode/url`, `GET /api/vscode/status`, and `GET /api/desktop/url` — optional editor or desktop launch surfaces
+- `GET /v1/models` and `POST /v1/chat/completions` — OpenAI-compatible gateway
 
 Record `/server_info.version` early and decide whether your UI should hard-fail, soft-warn, or feature-gate when the server is older than the contract you expect. Handle compatibility explicitly instead of trying to infer partial support.
 
 If the running server and repository docs differ, trust the live server contract first.
+
+## Deferred init
+
+Some deployments start in a dormant warm-pool mode. In that state, stateless routes are live, but most authenticated `/api/*` routes return `503` until the orchestrator calls `POST /api/init`.
+
+- `GET /api/init` returns `{ "state": "dormant|initializing|ready", "error": null }` and intentionally does not require the init key.
+- `POST /api/init` uses `X-Init-API-Key`, not `X-Session-API-Key`.
+- The init body can deliver runtime values such as `session_api_keys`, `secret_key`, `conversations_path`, `bash_events_dir`, `conversation_worktree_root`, `webhooks`, `web_url`, `allow_cors_origins`, `max_concurrent_runs`, `env`, and `telemetry`.
+- Ordinary browser UIs should treat `state=dormant` or route-level `503` responses as "runtime starting" unless they are the trusted orchestrator responsible for initialization.
 
 ## Base URL patterns
 
@@ -106,6 +124,19 @@ Legacy fallbacks exist but are not the preferred browser path:
 - `session_api_key` query parameter
 - `X-Session-API-Key` WebSocket header for non-browser clients
 
+### OpenAI-compatible routes
+
+`/v1/models` and `/v1/chat/completions` accept either `X-Session-API-Key` or `Authorization: Bearer <session-api-key>`. This is the same session-key trust model, not a separate public API key system.
+
+`POST /v1/chat/completions` may return `text/event-stream` when `stream=true` because it is imitating OpenAI's API. Native conversation/event UIs should still use `/sockets/events/{conversation_id}` for live OpenHands event objects.
+
+Useful gateway headers:
+
+- `X-OpenHands-ServerConversation-ID` — reuse an existing conversation or read the conversation ID created by the response.
+- `X-OpenHands-Observability-Span-Name`
+- `X-OpenHands-Observability-Tags`
+- `X-OpenHands-Observability-Metadata`
+
 ### Workspace artifacts and embedded HTML
 
 The server has a narrower cookie-based auth path for browser embeds that cannot attach custom headers, such as `<iframe src>` and `<img src>` requests.
@@ -148,6 +179,7 @@ Important UI fields often include:
   "created_at": "timestamp",
   "updated_at": "timestamp",
   "execution_status": "idle|running|paused|waiting_for_confirmation|finished|error|stuck|deleting",
+  "leaf_event_id": "optional-event-id",
   "tags": {},
   "workspace": { "kind": "LocalWorkspace", "working_dir": "workspace/project" },
   "agent": {}
@@ -192,6 +224,8 @@ The simplest write path is:
 - `GET /health`
 - `GET /ready`
 - `GET /server_info`
+- `GET /api/init`
+- `POST /api/init`
 - `GET /api/tools/`
 - `POST /api/skills`
 - `POST /api/skills/sync`
@@ -202,6 +236,15 @@ The simplest write path is:
 - `PATCH /api/skills/installed/{skill_name}`
 - `DELETE /api/skills/installed/{skill_name}`
 - `POST /api/skills/installed/{skill_name}/refresh`
+- `POST /api/plugins`
+- `GET /api/plugins/marketplace`
+- `POST /api/plugins/install`
+- `GET /api/plugins/installed`
+- `GET /api/plugins/installed/{plugin_name}`
+- `PATCH /api/plugins/installed/{plugin_name}`
+- `DELETE /api/plugins/installed/{plugin_name}`
+- `POST /api/plugins/installed/{plugin_name}/refresh`
+- `POST /api/sub-agents`
 - `POST /api/hooks`
 - `GET /api/profiles`
 - `GET /api/profiles/{name}`
@@ -209,12 +252,29 @@ The simplest write path is:
 - `DELETE /api/profiles/{name}`
 - `POST /api/profiles/{name}/rename`
 - `POST /api/profiles/{name}/activate`
+- `GET /api/agent-profiles`
+- `GET /api/agent-profiles/{name}`
+- `POST /api/agent-profiles/{name}`
+- `DELETE /api/agent-profiles/{name}`
+- `POST /api/agent-profiles/{name}/rename`
+- `POST /api/agent-profiles/{profile_id}/activate`
+- `POST /api/agent-profiles/{name}/materialize`
 - `POST /api/mcp/test`
+- `POST /api/mcp/oauth/start`
+- `GET /api/mcp/oauth/status/{job_id}`
+- `POST /api/mcp/oauth/callback/{job_id}`
 - `POST /api/auth/workspace-session`
 - `DELETE /api/auth/workspace-session`
 - `GET /api/llm/providers`
 - `GET /api/llm/models`
 - `GET /api/llm/models/verified`
+- `GET /api/llm/subscription/openai/models`
+- `GET /api/llm/subscription/openai/status`
+- `POST /api/llm/subscription/openai/device/start`
+- `POST /api/llm/subscription/openai/device/poll`
+- `POST /api/llm/subscription/openai/logout`
+- `GET /v1/models`
+- `POST /v1/chat/completions`
 
 ### Conversations
 
@@ -228,7 +288,11 @@ The simplest write path is:
 - `POST /api/conversations/{conversation_id}/run`
 - `POST /api/conversations/{conversation_id}/pause`
 - `POST /api/conversations/{conversation_id}/interrupt`
+- `POST /api/conversations/{conversation_id}/goal`
+- `POST /api/conversations/{conversation_id}/goal/stop`
+- `POST /api/conversations/{conversation_id}/goal/resume`
 - `POST /api/conversations/{conversation_id}/fork`
+- `POST /api/conversations/{conversation_id}/navigate`
 - `POST /api/conversations/{conversation_id}/condense`
 - `GET /api/conversations/{conversation_id}/agent_final_response`
 - `POST /api/conversations/{conversation_id}/ask_agent`
@@ -237,6 +301,7 @@ The simplest write path is:
 - `POST /api/conversations/{conversation_id}/security_analyzer`
 - `POST /api/conversations/{conversation_id}/switch_profile`
 - `POST /api/conversations/{conversation_id}/switch_llm`
+- `POST /api/conversations/{conversation_id}/load_plugin`
 - `POST /api/conversations/{conversation_id}/switch_acp_model`
 
 Important notes:
@@ -245,6 +310,10 @@ Important notes:
 - If the client wants to choose the ID, the field is `conversation_id`, not `id`.
 - There is **no dedicated resume endpoint**. To start or resume execution, call `POST /api/conversations/{conversation_id}/run`.
 - `POST /api/conversations/{conversation_id}/interrupt` is the immediate cancel path for an in-flight run; `POST /pause` pauses the conversation loop after the current work yields control.
+- Goal loops are separate from normal run/pause/resume: `POST /goal` starts a loop with `{ "objective": "...", "max_iterations": 10 }`, `/goal/stop` stops only that loop, and `/goal/resume` resumes the last interrupted goal loop.
+- `POST /api/conversations/{conversation_id}/navigate` moves the active branch/HEAD to an existing event and returns updated `ConversationInfo`; it does not fork a new conversation.
+- `POST /api/conversations/{conversation_id}/load_plugin` accepts `{ "plugin_ref": "..." }` and loads from the conversation's registered marketplaces.
+- `POST /api/conversations/{conversation_id}/switch_acp_model` accepts `{ "model": "..." }` and applies only to ACP conversations/providers that support model switching.
 
 ### Events
 
@@ -273,10 +342,13 @@ Useful filters on event search include:
 - `GET /api/file/download-trajectory/{conversation_id}`
 - `GET /api/file/home`
 - `GET /api/file/search_subdirs?path=/absolute/path&limit=100&page_id=<cursor>`
+- `GET /api/file/archive?path=/absolute/path&format=git-delta|tar.gz&base_ref=<ref>`
 - `GET /api/conversations/{conversation_id}/workspace`
 - `GET /api/conversations/{conversation_id}/workspace/{file_path:path}`
 
 Paths must be absolute for the `/api/file/*` helpers. The `/api/conversations/{conversation_id}/workspace...` routes are static-file serving routes rooted at that conversation's local workspace.
+
+`/api/file/archive` returns a downloadable archive. `format=git-delta` produces a patch-like archive of changes against `base_ref`; `format=tar.gz` captures the full directory and works for non-git folders.
 
 ### Saved workspaces
 
@@ -315,12 +387,16 @@ Useful request shape:
 ### Git, editor, and desktop helpers
 
 - `GET /api/git/changes?path=/absolute/path/to/repo`
-- `GET /api/git/diff?path=/absolute/path/to/file/or/repo`
+- `GET /api/git/diff?path=/absolute/path/to/file/or/repo&ref=<optional-ref>&commit=<optional-sha>`
+- `GET /api/git/commits?path=/absolute/path/to/repo&limit=50`
+- `GET /api/git/commits/{sha}/changes?path=/absolute/path/to/repo`
 - `GET /api/vscode/url?base_url=<optional-browser-base>`
 - `GET /api/vscode/status`
 - `GET /api/desktop/url?base_url=<optional-browser-base>`
 
 `/api/vscode/status` is a lightweight capability check for whether a VS Code bridge is available before rendering an "Open in VS Code" action.
+
+For `/api/git/diff`, `ref` and `commit` are mutually exclusive. Commit history endpoints return empty results for non-repositories and use `400` for actionable git errors.
 
 ### Settings endpoints
 
@@ -330,10 +406,19 @@ Useful for admin or advanced configuration UIs:
 - `PATCH /api/settings`
 - `GET /api/settings/agent-schema`
 - `GET /api/settings/conversation-schema`
+- `POST /api/settings/mcp/{settings_key}`
+- `PATCH /api/settings/mcp/{settings_key}`
+- `DELETE /api/settings/mcp/{settings_key}`
 - `GET /api/settings/secrets`
 - `PUT /api/settings/secrets`
 - `GET /api/settings/secrets/{name}`
 - `DELETE /api/settings/secrets/{name}`
+
+Important notes:
+
+- `PATCH /api/settings` accepts sparse diffs such as `agent_settings_diff`, `conversation_settings_diff`, `misc_settings_diff`, `active_profile`, and `active_agent_profile_id`.
+- `misc_settings` is frontend-owned opaque data; use it for UI preferences that the server persists but does not interpret.
+- Prefer the `/api/settings/mcp/{settings_key}` endpoints for creating, patching, or deleting one MCP server without replacing sibling entries.
 
 ### Profiles endpoints
 
@@ -354,37 +439,62 @@ Important notes:
 - `POST /api/profiles/{name}` saves or overwrites the named profile from a request body shaped like `{ "llm": { ... }, "include_secrets": true }`.
 - `POST /api/profiles/{name}/activate` applies the stored LLM config to current agent settings and records that name as `active_profile`.
 
-### MCP helper
+### Agent profiles endpoints
+
+Useful for launch-profile pickers and agent-configuration UIs:
+
+- `GET /api/agent-profiles`
+- `GET /api/agent-profiles/{name}`
+- `POST /api/agent-profiles/{name}`
+- `DELETE /api/agent-profiles/{name}`
+- `POST /api/agent-profiles/{name}/rename`
+- `POST /api/agent-profiles/{profile_id}/activate`
+- `POST /api/agent-profiles/{name}/materialize`
+
+Important notes:
+
+- Agent profiles are distinct from LLM profiles under `/api/profiles`.
+- `GET /api/agent-profiles` returns `profiles` plus `active_agent_profile_id`. On first call, it may lazily seed and activate a default profile.
+- `POST /api/agent-profiles/{profile_id}/activate` activates by stable profile ID and is pointer-only; it does not write current `agent_settings`.
+- Agent profiles are secret-free at rest, so `GET /api/agent-profiles/{name}` has no `X-Expose-Secrets` mode.
+- `POST /api/agent-profiles/{name}/materialize` dry-runs LLM and MCP references and returns diagnostics. Dangling refs are reported in the JSON body instead of raising, except unknown profile names still return `404`.
+
+### MCP helpers
+
+Useful for browser-based settings UIs:
 
 - `POST /api/mcp/test`
+- `POST /api/mcp/oauth/start`
+- `GET /api/mcp/oauth/status/{job_id}`
+- `POST /api/mcp/oauth/callback/{job_id}`
 
 Important notes:
 
 - `POST /api/mcp/test` validates one candidate MCP server config without persisting it.
 - `POST /api/mcp/test` returns HTTP 200 for both success and expected validation failures; use the JSON body's `ok` flag and `error_kind` instead of treating non-2xx status as the only failure signal.
+- `POST /api/mcp/test` can return OAuth state for OAuth-capable MCP configs and can optionally invoke one caller-chosen read-only tool via `tool_call`.
+- MCP OAuth setup is a three-step probe: start with the same request shape as `/test`, poll status by `job_id`, then submit the localhost callback URL to `/oauth/callback/{job_id}`.
 
-### LLM subscription endpoints
+### LLM endpoints
 
-For UIs that support ChatGPT subscription (Plus/Pro) login flows:
+Useful for provider/model pickers and trusted subscription sign-in:
 
+- `GET /api/llm/providers`
+- `GET /api/llm/models?provider=<provider>`
+- `GET /api/llm/models/verified`
 - `GET /api/llm/subscription/openai/models`
 - `GET /api/llm/subscription/openai/status`
 - `POST /api/llm/subscription/openai/device/start`
 - `POST /api/llm/subscription/openai/device/poll`
 - `POST /api/llm/subscription/openai/logout`
 
-The device-login flow starts with `POST .../device/start` (returns a `user_code` and `verification_uri` for the user to visit), then polls `POST .../device/poll` until the login succeeds or times out. `GET .../status` returns safe connection state without tokens.
+Important notes:
 
-### OpenAI-compatible gateway
+- `/api/llm/models` supports an optional `provider` filter.
+- Subscription auth endpoints return safe status and device-code state, not raw tokens.
+- `device/start` returns an opaque server-side `device_code`, `user_code`, verification URL, expiry, and polling interval. Poll with `{ "device_code": "..." }`.
 
-These routes live at the server root, **not** under `/api`:
-
-- `GET /v1/models`
-- `POST /v1/chat/completions`
-
-They expose an OpenAI-compatible chat completions interface backed by the agent server. Useful for integrating with tools or clients that speak the OpenAI protocol.
-
-### Skills and hooks request shapes
+### Skills, plugins, sub-agents, and hooks request shapes
 
 Typical request bodies:
 
@@ -423,6 +533,53 @@ Installed-skill management uses separate request bodies:
 ```
 
 Useful installed-skill response fields include `name`, `enabled`, `source`, `resolved_ref`, `installed_at`, and `install_path`. The marketplace catalog returns available skills plus installation status so a UI can render install or update actions without re-deriving that state.
+
+Plugin management mirrors skills but uses plugin-specific routes and fields:
+
+```json
+{
+  "load_user": true,
+  "load_project": true,
+  "project_dir": "/workspace/project"
+}
+```
+
+```json
+{
+  "source": "github:OpenHands/extensions/plugins/city-weather",
+  "ref": "main",
+  "repo_path": null,
+  "force": false
+}
+```
+
+Useful installed-plugin response fields include `name`, `version`, `description`, `enabled`, `source`, `resolved_ref`, `repo_path`, `installed_at`, `install_path`, `skills`, and `files`.
+
+Sub-agent discovery is read-only:
+
+```json
+{
+  "load_user": true,
+  "load_project": true,
+  "load_builtin": true,
+  "project_dir": "/workspace/project"
+}
+```
+
+The response is `{ "agents": [...] }`, with summaries that can include `name`, `description`, `model`, `tools`, `skills`, `system_prompt`, `level`, `source`, and `is_builtin`.
+
+## OpenAI-compatible API
+
+- `GET /v1/models`
+- `POST /v1/chat/completions`
+
+Important notes:
+
+- Auth accepts either `X-Session-API-Key` or `Authorization: Bearer <session-api-key>`.
+- The model list exposes OpenAI-compatible model identifiers, including profile-backed models where configured.
+- `POST /v1/chat/completions` returns `X-OpenHands-ServerConversation-ID`; store it if the UI wants to continue the same underlying OpenHands conversation.
+- Send `X-OpenHands-ServerConversation-ID` on later requests to reuse that conversation.
+- `stream=true` uses OpenAI-compatible SSE chunks. This is separate from OpenHands event WebSockets.
 
 ## WebSocket API
 
@@ -512,7 +669,10 @@ A strong initial feature order is:
 When refreshing this reference, inspect these files first:
 
 - `openhands-agent-server/openhands/agent_server/api.py`
+- `openhands-agent-server/openhands/agent_server/init_router.py`
+- `openhands-agent-server/openhands/agent_server/auth_router.py`
 - `openhands-agent-server/openhands/agent_server/conversation_router.py`
+- `openhands-agent-server/openhands/agent_server/credential_binding.py`
 - `openhands-agent-server/openhands/agent_server/event_router.py`
 - `openhands-agent-server/openhands/agent_server/sockets.py`
 - `openhands-agent-server/openhands/agent_server/file_router.py`
@@ -520,8 +680,11 @@ When refreshing this reference, inspect these files first:
 - `openhands-agent-server/openhands/agent_server/server_details_router.py`
 - `openhands-agent-server/openhands/agent_server/settings_router.py`
 - `openhands-agent-server/openhands/agent_server/skills_router.py`
+- `openhands-agent-server/openhands/agent_server/plugins_router.py`
+- `openhands-agent-server/openhands/agent_server/sub_agents_router.py`
 - `openhands-agent-server/openhands/agent_server/hooks_router.py`
 - `openhands-agent-server/openhands/agent_server/profiles_router.py`
+- `openhands-agent-server/openhands/agent_server/agent_profiles_router.py`
 - `openhands-agent-server/openhands/agent_server/mcp_router.py`
 - `openhands-agent-server/openhands/agent_server/tool_router.py`
 - `openhands-agent-server/openhands/agent_server/auth_router.py`
@@ -531,6 +694,8 @@ When refreshing this reference, inspect these files first:
 - `openhands-agent-server/openhands/agent_server/vscode_router.py`
 - `openhands-agent-server/openhands/agent_server/desktop_router.py`
 - `openhands-agent-server/openhands/agent_server/llm_router.py`
+- `openhands-agent-server/openhands/agent_server/models.py`
+- `openhands-agent-server/openhands/agent_server/openapi.py`
 - `openhands-agent-server/openhands/agent_server/openai/router.py`
 
 Also check the current browser-facing examples in `software-agent-sdk`:
@@ -543,5 +708,6 @@ Also check the current browser-facing examples in `software-agent-sdk`:
 - `examples/02_remote_agent_server/13_workspace_get_llm.py`
 - `examples/02_remote_agent_server/14_client_defined_tools.py`
 - `examples/02_remote_agent_server/15_openai_compatible_gateway.py`
+- `examples/02_remote_agent_server/16_deferred_init.py`
 
 Treat those client-side examples as implementation inspiration, not as a stronger source of truth than the current router code or live OpenAPI schema.
