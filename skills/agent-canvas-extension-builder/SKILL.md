@@ -27,7 +27,7 @@ When creating multiple extensions in one repository, establish a monorepo layout
 
 Treat installation as one extension per request. The current Customize -> Extensions flow accepts one `source`, optional `ref`, and optional `repo_path`; it does not recursively discover or bulk-install every manifest in a repository. Add each extension separately using the same source/ref and its own `repo_path`.
 
-Read `references/v1-contract.md` before implementing unfamiliar host API behavior. Read `references/testing-and-installation.md` before installing or testing inside Agent Canvas, especially for a multi-extension repository.
+Read `references/v1-contract.md` before implementing unfamiliar host API behavior. Read `references/connections.md` before connecting to Agent Server, the Automation service, or WebSocket endpoints. Read `references/testing-and-installation.md` before installing or testing inside Agent Canvas, especially for a multi-extension repository.
 
 ## Inspect current upstream behavior
 
@@ -108,6 +108,16 @@ Use the host contract deliberately:
 - Use `navigate(absoluteCanvasPath)` for Canvas-aware routing.
 - Use `host.agentServer.request({ path, method, body, headers })` for authenticated calls to the owning Agent Server.
 - Pass only root-relative request paths beginning with one `/`; never pass absolute URLs or `//` paths.
+
+Prefer [`@openhands/typescript-client`](https://github.com/OpenHands/typescript-client) for bundled TypeScript integrations whenever it covers the required Agent Server API and the necessary connection inputs are available. Prefer its typed clients, models, compatibility checks, and WebSocket lifecycle over hand-written transport code. Bundle the client into the self-contained extension entrypoint; never leave a bare package import or external runtime chunk.
+
+Respect the host API 1 connection boundary:
+
+- Treat `host.agentServer.request` as the portable Agent Server HTTP path; Canvas selects the active backend and supplies authentication.
+- Do not derive an Agent Server URL from `window.location` or extract session keys from Canvas internals.
+- Do not send Automation service requests through `host.agentServer.request` unless the backend explicitly documents an Agent Server proxy for them. Automation is a separate service with deployment-provided base URL and authentication.
+- Do not open a direct Agent Server WebSocket from a portable v1 extension. The host currently exposes neither the owning server origin nor a WebSocket/auth capability. Poll through `host.agentServer.request`, add a backend-owned bridge, or feature-detect a future host subscription API.
+- Use the TypeScript client's Agent Server WebSocket support in trusted standalone or future host-enabled contexts, and stop it during disposal. Do not treat the Agent Server client as an Automation service client.
 
 Return cleanup from every layer that creates effects:
 
@@ -204,5 +214,6 @@ Summarize:
 ## Resources
 
 - `references/v1-contract.md` — exact manifest, host API, lifecycle, routing, trust, and current limitations.
+- `references/connections.md` — Agent Server HTTP, Automation service, WebSocket, and TypeScript client connection guidance.
 - `references/testing-and-installation.md` — test strategy, manual Canvas workflow, and installation coordinates.
 - `scripts/validate-extension.mjs` — dependency-free static validator for an extension directory.
