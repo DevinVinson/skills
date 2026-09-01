@@ -1,23 +1,23 @@
-# Connecting an Agent Canvas extension
+# Connecting an OpenHands App
 
 Use the narrowest supported connection surface. Treat backend URLs, session keys, and automation credentials as capabilities supplied by Agent Canvas or a backend, not values to discover from browser globals or guessed ports.
 
 ## Prefer the TypeScript client
 
-Prefer [`@openhands/typescript-client`](https://github.com/OpenHands/typescript-client) whenever a bundled TypeScript extension has the connection inputs required by the client and the client covers the needed Agent Server API. It provides maintained request models, typed clients, event types, compatibility checks, and WebSocket lifecycle code that track the canonical Agent Server contract.
+Prefer [`@openhands/typescript-client`](https://github.com/OpenHands/typescript-client) whenever a bundled TypeScript app has the connection inputs required by the client and the client covers the needed Agent Server API. It provides maintained request models, typed clients, event types, compatibility checks, and WebSocket lifecycle code that track the canonical Agent Server contract.
 
 Use direct `fetch` or raw `WebSocket` only when:
 
 - the client does not yet expose the required endpoint or transport option;
 - host API 1 supplies only its narrower request adapter;
-- a small dependency-free extension does not justify bundling the client; or
+- a small dependency-free app does not justify bundling the client; or
 - an integration targets the separate Automation service, which the Agent Server client does not model.
 
-Pin a compatible client version, bundle it into the extension's self-contained ESM entrypoint, and test the built bundle. Do not leave `@openhands/typescript-client` as a browser bare import or external chunk. Check the current package exports before selecting a client class; the repository evolves with the Agent Server API.
+Pin a compatible client version, bundle it into the app's self-contained ESM entrypoint, and test the built bundle. Do not leave `@openhands/typescript-client` as a browser bare import or external chunk. Check the current package exports before selecting a client class; the repository evolves with the Agent Server API.
 
 ## Agent Server HTTP
 
-For a host API 1 extension, use the host-provided authenticated adapter:
+For a host API 1 app, use the host-provided authenticated adapter:
 
 ```js
 const conversations = await host.agentServer.request({
@@ -27,11 +27,11 @@ const conversations = await host.agentServer.request({
 });
 ```
 
-Pass exactly one root-relative path. Do not pass an origin, protocol-relative URL, or path without a leading slash. Let Canvas select the active backend and attach its authentication. This preserves backend switching and avoids placing a session key in extension code.
+Pass exactly one root-relative path. Do not pass an origin, protocol-relative URL, or path without a leading slash. Let Canvas select the active backend and attach its authentication. This preserves backend switching and avoids placing a session key in app code.
 
 Do not construct an `HttpClient` from `host.backend`: host API 1 exposes backend identity (`id`, `kind`, and `orgId`), not an Agent Server origin or session API key. Do not inspect Canvas internals, Redux stores, local storage, DOM attributes, or undocumented globals to recover those values.
 
-When developing a trusted standalone browser client outside the extension sandbox, prefer the TypeScript client:
+When developing a trusted standalone browser client outside Agent Canvas, prefer the TypeScript client:
 
 ```ts
 import { HttpClient } from "@openhands/typescript-client";
@@ -52,7 +52,7 @@ If typed high-level clients cover the operation, prefer those over the generic `
 
 Treat the Automation service as a separate backend. Its API is normally mounted under `/api/automation/v1`, but the origin, path prefix, and authentication mode are deployment-provided values rather than Agent Server defaults.
 
-Host API 1 does not expose an automation request helper, automation base URL, or automation credential. Therefore, an extension must not:
+Host API 1 does not expose an automation request helper, automation base URL, or automation credential. Therefore, an app must not:
 
 - route `/api/automation/...` through `host.agentServer.request` unless the owning Agent Server explicitly documents a proxy at that path;
 - assume the Automation service shares the Agent Server origin;
@@ -102,22 +102,22 @@ socket.addEventListener("open", () => {
 
 Browsers cannot set arbitrary WebSocket headers. Query-string authentication is a legacy fallback and may leak through URLs or logs; use it only when required by the selected client/server compatibility window.
 
-Host API 1 does not expose an Agent Server origin, session API key, or WebSocket factory. A portable v1 extension therefore cannot open an authenticated Agent Server WebSocket directly. Do not derive a socket from `window.location`: Canvas and the active Agent Server may use different origins or proxy prefixes, and backend switching would leave the socket attached to the wrong server.
+Host API 1 does not expose an Agent Server origin, session API key, or WebSocket factory. A portable v1 app therefore cannot open an authenticated Agent Server WebSocket directly. Do not derive a socket from `window.location`: Canvas and the active Agent Server may use different origins or proxy prefixes, and backend switching would leave the socket attached to the wrong server.
 
-For live extension data under host API 1, choose one of these approaches:
+For live app data under host API 1, choose one of these approaches:
 
 - poll through `host.agentServer.request` with bounded intervals, visibility awareness, abort/disposal guards, and a stale state;
 - add a backend endpoint that aggregates the required state and expose it through the authenticated host request adapter; or
 - require and feature-detect a future host WebSocket/subscription capability.
 
-Always close sockets, stop TypeScript client instances, clear reconnect timers, and suppress late callbacks when the page unmounts or the extension deactivates.
+Always close sockets, stop TypeScript client instances, clear reconnect timers, and suppress late callbacks when the page unmounts or the app deactivates.
 
 ## Testing connection behavior
 
 Test the supported boundary rather than hidden Canvas implementation details:
 
 - assert Agent Server HTTP uses `host.agentServer.request` with a root-relative path;
-- assert no session key or backend origin is embedded in the built extension;
+- assert no session key or backend origin is embedded in the built app;
 - assert an unavailable Automation capability produces a clear unsupported state rather than a guessed request;
 - assert polling, sockets, and TypeScript client instances stop during disposal;
 - assert backend changes cause old connection state to be discarded;
