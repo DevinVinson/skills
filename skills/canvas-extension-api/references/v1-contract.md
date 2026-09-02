@@ -1,6 +1,6 @@
-# Agent Canvas Extension v1 contract
+# Canvas Extensions API v1 contract
 
-Use this reference for manifest schema 1 and host API 1 as implemented by the initial Canvas Extensions frontend landing.
+Use this reference for manifest schema 1 and host API 1 as implemented by the initial Apps frontend landing.
 
 ## Authoritative sources
 
@@ -23,15 +23,15 @@ The local demo `/Users/devinvinson/Desktop/canvas-pulse` demonstrates a richer h
 
 ## Product and trust model
 
-Treat the active Agent Server as the owner of installed extensions. Source, resolved revision, files, manifest, and enabled state live on that backend. Switching backend replaces the active extension inventory.
+Treat the active Agent Server as the owner of installed apps. Source, resolved revision, files, manifest, and enabled state live on that backend. Switching backend replaces the active app inventory.
 
 Treat enabled code as trusted same-realm JavaScript. No iframe, worker sandbox, granular permission boundary, or CSS security boundary exists in v1. Enabled code has the ambient browser authority available to Canvas and can use authenticated helpers for the current backend.
 
-Keep install and enable separate. Installation produces a disabled extension. Enabling is the explicit execution consent point. Enablement and disablement are hot and require no restart.
+Keep install and enable separate. Installation produces a disabled app. Enabling is the explicit execution consent point. Enablement and disablement are hot and require no restart.
 
 ## Manifest schema 1
 
-Filename: `canvas-extension.json` at the extension root.
+Filename: `canvas-extension.json` at the app package root.
 
 ```ts
 interface CanvasExtensionManifest {
@@ -59,15 +59,15 @@ Required manifest fields are `schema_version`, `name`, `version`, and `entrypoin
 
 Apply these rules:
 
-- Match extension names and contribution IDs against `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
+- Match app manifest names and contribution IDs against `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
 - Begin each page path with `/`.
 - Use one or more kebab-case route segments for each page path.
-- Keep the entrypoint inside the installed extension root.
+- Keep the entrypoint inside the installed app package root.
 - Produce one self-contained browser ESM entrypoint.
 - Bundle or embed dependencies, CSS, and small assets.
 - Leave no unresolved bare imports or external output chunks.
 
-The frontend normalizes the declared leading slash away for internal route matching. It validates the extension name, contribution ID, and every path segment before admitting the page.
+The frontend normalizes the declared leading slash away for internal route matching. It validates the app manifest name, contribution ID, and every path segment before admitting the page.
 
 ## Host API 1
 
@@ -144,7 +144,7 @@ Canvas mounts a declared page under:
 /extensions/{extension-name}/{declared-page-path}
 ```
 
-For an extension `canvas-pulse` and page path `/pulse`, the root URL is:
+For an app `canvas-pulse` and page path `/pulse`, the root URL is:
 
 ```text
 /extensions/canvas-pulse/pulse
@@ -168,7 +168,7 @@ The route is base-path aware through React Router. Avoid constructing browser or
 
 ## Agent Server requests
 
-Use `host.agentServer.request` to target the extension-owning backend with Canvas authentication. The helper accepts method, root-relative path, body, and headers.
+Use `host.agentServer.request` to target the app-owning backend with Canvas authentication. The helper accepts method, root-relative path, body, and headers.
 
 Valid:
 
@@ -195,14 +195,14 @@ For every enabled installation, Canvas:
 1. Fetches authenticated entrypoint text from the owning backend.
 2. Imports the self-contained ESM bundle from a Blob URL.
 3. Validates the `activate` export.
-4. Creates an extension-scoped registry and calls `activate`.
+4. Creates an app-scoped registry and calls `activate`.
 5. Admits only page registrations declared by the manifest.
 6. Renders contributed pages under a Canvas-owned error boundary.
 7. Unmounts pages and invokes cleanup when the activation inventory changes.
 
 A page mount may be synchronous or asynchronous. If an async mount resolves after route disposal, Canvas immediately invokes the returned disposer.
 
-Build extension code to tolerate repeated activation and mounting. Guard asynchronous requests against late state updates. Clear intervals, animation frames, observers, event listeners, and DOM/style nodes.
+Build app code to tolerate repeated activation and mounting. Guard asynchronous requests against late state updates. Clear intervals, animation frames, observers, event listeners, and DOM/style nodes.
 
 ## Management API
 
@@ -210,7 +210,7 @@ The planned/current frontend contract uses:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/canvas-extensions/installed` | List installed extensions |
+| `GET` | `/api/canvas-extensions/installed` | List installed apps |
 | `POST` | `/api/canvas-extensions/install` | Install disabled from Git or backend-local path |
 | `GET` | `/api/canvas-extensions/installed/{name}` | Read one installation |
 | `PATCH` | `/api/canvas-extensions/installed/{name}` | Set enabled state |
@@ -228,13 +228,13 @@ Install request:
 }
 ```
 
-Interpret backend-local paths on the Agent Server machine, not in the frontend process. A repository may hold multiple extensions under different `repo_path` values.
+Interpret backend-local paths on the Agent Server machine, not in the frontend process. A repository may hold multiple apps under different `repo_path` values.
 
-Each install request resolves exactly one extension package root. The directory selected by `repo_path`, or the repository root when `repo_path` is omitted, must contain that extension's `canvas-extension.json`. The current Add extension form submits one install request and does not recursively discover or bulk-install nested extension manifests. Install every extension separately with the same `source` and `ref` when appropriate and a distinct `repo_path`.
+Each install request resolves exactly one canvas extension package root. The directory selected by `repo_path`, or the repository root when `repo_path` is omitted, must contain that app's `canvas-extension.json`. The current Add app form submits one install request and does not recursively discover or bulk-install nested app manifests. Install every app separately with the same `source` and `ref` when appropriate and a distinct `repo_path`.
 
-Treat co-located extensions as independent installations: each has its own manifest name, version, resolved revision record, enabled state, bundle, registrations, and cleanup lifecycle. Shared repository source or build tooling does not combine their runtime identities.
+Treat co-located apps as independent installations: each app has its own manifest name, version, resolved revision record, enabled state, bundle, registrations, and cleanup lifecycle. Shared repository source or build tooling does not combine their runtime identities.
 
-At the initial frontend landing, backend endpoint availability may lag behind the frontend. HTTP 404 means the backend lacks Canvas Extension support. Cloud backends are not supported by that initial service implementation.
+At the initial frontend landing, backend endpoint availability may lag behind the frontend. HTTP 404 means the backend lacks Apps support. Cloud backends are not supported by that initial service implementation.
 
 ## Current v1 limitations
 
@@ -250,4 +250,4 @@ Do not promise or implement these planned features without confirming a newer co
 - arbitrary install lifecycle scripts;
 - automatic agent-driven enablement.
 
-Page contributions are the proven initial ABI. Host compatibility manifest fields and a published extension SDK/bundler template were still future work in the initial specification.
+Page contributions are the proven initial ABI. Host compatibility manifest fields and a published Canvas Extensions API SDK/bundler template were still future work in the initial specification.
