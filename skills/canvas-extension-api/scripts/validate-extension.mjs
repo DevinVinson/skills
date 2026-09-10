@@ -75,7 +75,7 @@ function validatePage(page, index, ids, paths) {
 async function main() {
   const input = process.argv[2];
   if (!input || input === "--help" || input === "-h") {
-    console.log("Usage: validate-extension.mjs <extension-directory>");
+    console.log("Usage: validate-extension.mjs <app-package-directory>");
     process.exit(input ? 0 : 2);
   }
 
@@ -83,7 +83,7 @@ async function main() {
   try {
     if (!(await stat(root)).isDirectory()) throw new Error("not a directory");
   } catch {
-    console.error(`ERROR: Extension directory does not exist: ${root}`);
+    console.error(`ERROR: App package directory does not exist: ${root}`);
     process.exit(1);
   }
 
@@ -142,7 +142,7 @@ async function main() {
   if (typeof entrypoint === "string" && entrypoint.trim()) {
     const resolvedEntrypoint = path.resolve(root, entrypoint);
     if (!isInside(root, resolvedEntrypoint)) {
-      fail("Manifest entrypoint must resolve to a file inside the extension root.");
+      fail("Manifest entrypoint must resolve to a file inside the app package root.");
     } else {
       try {
         const [realRoot, realEntrypoint] = await Promise.all([
@@ -150,7 +150,7 @@ async function main() {
           realpath(resolvedEntrypoint),
         ]);
         if (!isInside(realRoot, realEntrypoint)) {
-          fail("Manifest entrypoint escapes the extension root through a symbolic link.");
+          fail("Manifest entrypoint escapes the app package root through a symbolic link.");
         } else if (!(await stat(realEntrypoint)).isFile()) {
           fail(`Manifest entrypoint is not a file: ${entrypoint}`);
         } else {

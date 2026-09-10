@@ -1,13 +1,23 @@
 ---
-name: agent-canvas-extension-builder
-description: This skill should be used when the user asks to "create an Agent Canvas extension", "build a Canvas Extension", "add a page to Agent Canvas", "scaffold canvas-extension.json", "make an OpenHands Canvas addon", "validate a Canvas Extension", or mentions the Agent Canvas extension host API, registerPage, extension pages, or Canvas extension manifests.
+name: canvas-extension-api
+description: This skill should be used when the user asks to "create an OpenHands App", "build an app with the Canvas Extensions API", "add a custom interface to Agent Canvas", "scaffold canvas-extension.json", "validate an OpenHands App", or mentions Canvas Apps, Agent Canvas extensions, registerPage, app pages, or canvas extension packages.
 ---
 
-# Agent Canvas Extension Builder
+# Canvas Extensions API
 
-Create, extend, and validate OpenHands Agent Canvas Extensions that target the currently implemented manifest schema 1 and host API 1 routed-page ABI.
+Build and validate OpenHands Apps with the Canvas Extensions API, targeting the currently implemented manifest schema 1 and host API 1 routed-page ABI.
 
-Treat extensions as trusted, same-realm browser code owned by the active Agent Server. Distinguish them from skills and plugins: extensions change the Agent Canvas application; skills and plugins change agent behavior.
+Use the naming layers consistently:
+
+- **OpenHands Apps** — customer-facing category for interfaces people discover, install, enable, and open.
+- **Apps for Agent Canvas** — product phrasing that clarifies where apps run.
+- **Canvas Extensions API** — developer platform used to build apps.
+- **Canvas extension package** — technical artifact containing `canvas-extension.json` and its entrypoint.
+- **OpenHands Extensions** — ecosystem and repository umbrella for apps, skills, plugins, automations, and integrations.
+
+Use current product labels in user-facing instructions: **Apps for Agent Canvas**, **Add app**, **Installed apps**, **App source**, **Enable trusted app**, and **Build an app**. Keep technical identifiers such as `canvas-extension.json`, `/api/canvas-extensions/*`, `host.extension`, and `/extensions/*` unchanged unless the target implementation changes them.
+
+Treat apps as trusted, same-realm browser code owned by the active Agent Server. Keep the categories distinct: apps extend what people can do in Agent Canvas, plugins extend agent runtime capabilities, and skills provide agent instructions and knowledge.
 
 ## Establish the target
 
@@ -15,19 +25,19 @@ Start by locating the target directory instead of assuming the current workspace
 
 Clarify only choices that materially affect implementation:
 
-- extension purpose and page behavior;
+- app purpose and page behavior;
 - target repository and subdirectory;
 - dependency-free JavaScript versus a bundled TypeScript/framework project;
 - Agent Server endpoints or host metadata required;
 - whether to build only, install locally, or prepare publication instructions.
 
-Default to one extension with one routed page when requirements are otherwise clear. Keep the first implementation small and dependency-free unless the requested UI clearly benefits from a framework or the repository already has a bundler.
+Default to one app with one routed page when requirements are otherwise clear. Keep the first implementation small and dependency-free unless the requested UI clearly benefits from a framework or the repository already has a bundler.
 
-When creating multiple extensions in one repository, establish a monorepo layout before implementation. Give every extension an independent package root containing its own `canvas-extension.json`, entrypoint, version, tests, and optional README. Prefer stable subpaths such as `extensions/<extension-name>/`. Share source modules and build tooling only when each extension still emits an independent self-contained ESM entrypoint. Keep extension manifest names globally distinct within the Agent Server installation.
+When creating multiple apps in one repository, establish a monorepo layout before implementation. Give every app an independent canvas extension package root containing its own `canvas-extension.json`, entrypoint, version, tests, and optional README. Prefer stable subpaths such as `extensions/<app-name>/`. Share source modules and build tooling only when each app still emits an independent self-contained ESM entrypoint. Keep app manifest names globally distinct within the Agent Server installation.
 
-Treat installation as one extension per request. The current Customize -> Extensions flow accepts one `source`, optional `ref`, and optional `repo_path`; it does not recursively discover or bulk-install every manifest in a repository. Add each extension separately using the same source/ref and its own `repo_path`.
+Treat installation as one app per request. The current Customize -> Apps flow accepts one `source`, optional `ref`, and optional `repo_path`; it does not recursively discover or bulk-install every manifest in a repository. Add each app separately using the same source/ref and its own `repo_path`.
 
-Read `references/v1-contract.md` before implementing unfamiliar host API behavior. Read `references/connections.md` before connecting to Agent Server, the Automation service, or WebSocket endpoints. Read `references/testing-and-installation.md` before installing or testing inside Agent Canvas, especially for a multi-extension repository.
+Read `references/v1-contract.md` before implementing unfamiliar Canvas Extensions API behavior. Read `references/connections.md` before connecting to Agent Server, the Automation service, or WebSocket endpoints. Read `references/testing-and-installation.md` before installing or testing inside Agent Canvas, especially for a multi-app repository.
 
 ## Inspect current upstream behavior
 
@@ -41,9 +51,9 @@ Treat the v1 contract as young and subject to change. Before substantial work, c
 
 Do not invent planned surfaces such as conversation tabs, slots, themes, or visualizer replacement. Implement only contributions supported by the target version. At the initial landing commit, routed pages are the only implemented contribution.
 
-## Create the package
+## Create the app package
 
-Place `canvas-extension.json` at the extension root. Point `entrypoint` to one self-contained browser ESM file inside that root.
+Place `canvas-extension.json` at the app package root. Point `entrypoint` to one self-contained browser ESM file inside that root.
 
 Use this minimal manifest shape:
 
@@ -70,15 +80,15 @@ Use this minimal manifest shape:
 
 Follow these invariants:
 
-- Use lowercase letters, digits, and hyphens for extension names and page IDs.
+- Use lowercase letters, digits, and hyphens for app names and page IDs.
 - Use absolute kebab-case page paths with a leading slash.
-- Keep every manifest path within the extension root.
+- Keep every manifest path within the app package root.
 - Give each page ID and path a unique value.
 - Register only page IDs declared in the manifest.
 - Keep the entrypoint free of unresolved bare imports and external chunks.
 - Bundle dependencies, CSS, and small assets into the entrypoint when using build tooling.
 
-Add a concise `README.md` when the extension is intended for reuse or publication. Document purpose, build command if any, output entrypoint, installation coordinate, and verification steps. Avoid adding explanatory change-log documents.
+Add a concise `README.md` when the app is intended for reuse or publication. Document purpose, build command if any, output entrypoint, installation coordinate, and verification steps. Avoid adding explanatory change-log documents.
 
 ## Implement activation and pages
 
@@ -87,7 +97,7 @@ Export an `activate` function from the ESM entrypoint:
 ```js
 export function activate(host) {
   if (host.apiVersion !== "1") {
-    throw new Error(`This extension requires host API 1.`);
+    throw new Error(`This app requires host API 1.`);
   }
 
   return host.registerPage("dashboard", ({ container, path, navigate }) => {
@@ -109,14 +119,14 @@ Use the host contract deliberately:
 - Use `host.agentServer.request({ path, method, body, headers })` for authenticated calls to the owning Agent Server.
 - Pass only root-relative request paths beginning with one `/`; never pass absolute URLs or `//` paths.
 
-Prefer [`@openhands/typescript-client`](https://github.com/OpenHands/typescript-client) for bundled TypeScript integrations whenever it covers the required Agent Server API and the necessary connection inputs are available. Prefer its typed clients, models, compatibility checks, and WebSocket lifecycle over hand-written transport code. Bundle the client into the self-contained extension entrypoint; never leave a bare package import or external runtime chunk.
+Prefer [`@openhands/typescript-client`](https://github.com/OpenHands/typescript-client) for bundled TypeScript integrations whenever it covers the required Agent Server API and the necessary connection inputs are available. Prefer its typed clients, models, compatibility checks, and WebSocket lifecycle over hand-written transport code. Bundle the client into the self-contained app entrypoint; never leave a bare package import or external runtime chunk.
 
 Respect the host API 1 connection boundary:
 
 - Treat `host.agentServer.request` as the portable Agent Server HTTP path; Canvas selects the active backend and supplies authentication.
 - Do not derive an Agent Server URL from `window.location` or extract session keys from Canvas internals.
 - Do not send Automation service requests through `host.agentServer.request` unless the backend explicitly documents an Agent Server proxy for them. Automation is a separate service with deployment-provided base URL and authentication.
-- Do not open a direct Agent Server WebSocket from a portable v1 extension. The host currently exposes neither the owning server origin nor a WebSocket/auth capability. Poll through `host.agentServer.request`, add a backend-owned bridge, or feature-detect a future host subscription API.
+- Do not open a direct Agent Server WebSocket from a portable v1 app. The host currently exposes neither the owning server origin nor a WebSocket/auth capability. Poll through `host.agentServer.request`, add a backend-owned bridge, or feature-detect a future host subscription API.
 - Use the TypeScript client's Agent Server WebSocket support in trusted standalone or future host-enabled contexts, and stop it during disposal. Do not treat the Agent Server client as an Automation service client.
 
 Return cleanup from every layer that creates effects:
@@ -130,7 +140,7 @@ Assume activation, mounting, and disposal may happen repeatedly during hot enabl
 
 ## Build a production-quality page
 
-Render within the supplied `container`; do not replace unrelated Canvas DOM. Scope CSS under an extension-specific root class. Prefer Canvas CSS variables with sensible fallbacks rather than copying host implementation classes.
+Render within the supplied `container`; do not replace unrelated Canvas DOM. Scope CSS under an app-specific root class. Prefer Canvas CSS variables with sensible fallbacks rather than copying host implementation classes.
 
 Provide:
 
@@ -146,7 +156,7 @@ Avoid global event handlers, prototype changes, global CSS selectors, and ambien
 
 ## Add tests
 
-Test real extension code with a DOM environment and a small host test double. Test at minimum:
+Test real app code with a DOM environment and a small Canvas Extensions API host test double. Test at minimum:
 
 1. `activate` registers every declared page exactly once.
 2. The mount renders its initial state.
@@ -157,14 +167,14 @@ Test real extension code with a DOM environment and a small host test double. Te
 7. Unsupported host API versions fail clearly when compatibility is checked.
 8. Network and malformed-response errors render safely.
 
-Use the repository's existing test infrastructure. Do not introduce a new framework when adequate tests already exist. For dependency-free fixtures, Vitest with a DOM environment matches the upstream example, but it is not part of the extension runtime contract.
+Use the repository's existing test infrastructure. Do not introduce a new framework when adequate tests already exist. For dependency-free fixtures, Vitest with a DOM environment matches the upstream example, but it is not part of the Canvas Extensions API runtime contract.
 
 ## Validate the package
 
 Run the bundled validator before reporting completion:
 
 ```sh
-node /path/to/agent-canvas-extension-builder/scripts/validate-extension.mjs /path/to/extension
+node /path/to/canvas-extension-api/scripts/validate-extension.mjs /path/to/app-package
 ```
 
 Then run the target repository's formatter, linter, tests, and build. Inspect the final entrypoint rather than assuming the bundler configuration worked:
@@ -175,23 +185,23 @@ Then run the target repository's formatter, linter, tests, and build. Inspect th
 - confirm CSS and required small assets are bundled or embedded;
 - confirm the output runs as browser ESM without Node globals.
 
-Treat validator warnings as prompts for inspection, not proof of invalidity. The helper uses conservative static checks and cannot replace loading the bundle in Canvas.
+Treat validator warnings as prompts for inspection, not proof of invalidity. The helper uses conservative static checks and cannot replace loading the app bundle in Canvas.
 
 ## Install and verify safely
 
-Install only when requested. Installation and enablement are separate product actions: installation must leave the extension disabled, and enabling executes trusted same-realm code.
+Install only when requested. Installation and enablement are separate product actions: installation must leave the app disabled, and enabling executes trusted same-realm code.
 
-For a backend-local extension, install the path as interpreted on the Agent Server machine. For a Git repository, provide `source`, optional `ref`, and optional `repo_path`. Never assume a frontend-local path exists inside a remote or containerized backend.
+For a backend-local app, install the path as interpreted on the Agent Server machine. For a Git-hosted app, provide `source`, optional `ref`, and optional `repo_path`. Never assume a frontend-local path exists inside a remote or containerized backend.
 
-For multiple extensions in one repository, produce an install matrix listing extension name, manifest directory, source, ref, and `repo_path`. Submit one Add extension operation per row. Omit `repo_path` only when the selected extension lives at the repository root. Do not claim that selecting the repository root installs nested extensions.
+For multiple apps in one repository, produce an install matrix listing app name, manifest directory, source, ref, and `repo_path`. Submit one Add app operation per row. Omit `repo_path` only when the selected app lives at the repository root. Do not claim that selecting the repository root installs nested apps.
 
-Validate and test every extension package independently, then run shared repository checks once. Report partial failures by extension name rather than treating one passing package as validation of the entire repository.
+Validate and test every app package independently, then run shared repository checks once. Report partial failures by app name rather than treating one passing app package as validation of the entire repository.
 
 Verify the lifecycle in Canvas:
 
 1. Install and confirm the inventory entry is disabled.
 2. Review source, revision, manifest metadata, and contributions.
-3. Enable and accept the trusted-code disclosure.
+3. Enable and accept the trusted-code disclosure: “This app runs trusted JavaScript inside Agent Canvas and can make authenticated requests to the active Agent Server. Review its source and revision before enabling it.”
 4. Open the navigation item and exercise root and nested routes.
 5. Disable and confirm navigation and mounted UI disappear.
 6. Re-enable without restarting Canvas.
@@ -204,7 +214,7 @@ Do not enable, uninstall, publish, push, or open a pull request without the user
 
 Summarize:
 
-- extension location and contributed pages;
+- app location and contributed pages;
 - manifest schema and host API targeted;
 - build output and validation results;
 - tests run and their results;
@@ -216,4 +226,4 @@ Summarize:
 - `references/v1-contract.md` — exact manifest, host API, lifecycle, routing, trust, and current limitations.
 - `references/connections.md` — Agent Server HTTP, Automation service, WebSocket, and TypeScript client connection guidance.
 - `references/testing-and-installation.md` — test strategy, manual Canvas workflow, and installation coordinates.
-- `scripts/validate-extension.mjs` — dependency-free static validator for an extension directory.
+- `scripts/validate-extension.mjs` — dependency-free static validator for an app package directory.
