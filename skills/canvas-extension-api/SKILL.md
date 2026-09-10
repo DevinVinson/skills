@@ -1,6 +1,6 @@
 ---
 name: canvas-extension-api
-description: This skill should be used when the user asks to "create an OpenHands App", "build an app with the Canvas Extensions API", "add a custom interface to Agent Canvas", "scaffold canvas-extension.json", "validate an OpenHands App", or mentions Canvas Apps, Agent Canvas extensions, registerPage, app pages, or canvas extension packages.
+description: This skill should be used when the user asks to "create an OpenHands App", "scaffold a Canvas App", "build an app with the Canvas Extensions API", "add a custom interface to Agent Canvas", "validate an OpenHands App", or mentions Canvas Apps, Agent Canvas extensions, Blob-importable app bundles, registerPage, app pages, or canvas extension packages.
 ---
 
 # Canvas Extensions API
@@ -19,6 +19,24 @@ Use current product labels in user-facing instructions: **Apps for Agent Canvas*
 
 Treat apps as trusted, same-realm browser code owned by the active Agent Server. Keep the categories distinct: apps extend what people can do in Agent Canvas, plugins extend agent runtime capabilities, and skills provide agent instructions and knowledge.
 
+
+## Prefer the proven App authoring loop
+
+Treat an App as one authenticated browser dependency graph that Canvas imports from a Blob URL. Do not build a hosted SPA: the production result must be exactly one self-contained `extension.js` that exports `activate(host)`.
+
+For a new App, create an independent package in the target repository and implement its own UI, tests, and build tooling. Follow the Vite library-build reference in `references/packaging-recipes.md`; do not copy a shared starter or introduce a repository-wide runtime/workspace unless the target repository explicitly requires it.
+
+Keep all source, scripts, dependencies, tests, and checked-in `extension.js` inside the App package. Implement one declared page with explicit root, nested, and unknown-route behavior. Inject scoped CSS per mount and clean it up with framework roots, requests, listeners, timers, Workers, and object URLs. Build validation must verify `dist/extension.js` before synchronizing it to the App root. Do not synchronize an unverified artifact. Use `CHROME_PATH` when the Chrome executable is elsewhere.
+
+For an existing App, run the reusable static gate before and after its own checks:
+
+```sh
+node /path/to/canvas-extension-api/scripts/validate-extension.mjs /path/to/app
+node /path/to/canvas-extension-api/scripts/validate-extension.mjs /path/to/app --dist --marker <required-feature-marker>
+```
+
+Treat the static validator as a gate, not a replacement for the browser Blob smoke test. Read `references/packaging-recipes.md` before adding CSS, raw assets, dynamic modules, Workers, or WASM. Read `references/backend-safety.md` before any Agent Server integration or persistence. Read `references/acceptance-checklist.md` before reporting local Canvas compatibility.
+
 ## Establish the target
 
 Start by locating the target directory instead of assuming the current workspace. Inspect repository instructions, existing package management, build tooling, tests, and git status before editing.
@@ -33,7 +51,7 @@ Clarify only choices that materially affect implementation:
 
 Default to one app with one routed page when requirements are otherwise clear. Keep the first implementation small and dependency-free unless the requested UI clearly benefits from a framework or the repository already has a bundler.
 
-When creating multiple apps in one repository, establish a monorepo layout before implementation. Give every app an independent canvas extension package root containing its own `canvas-extension.json`, entrypoint, version, tests, and optional README. Prefer stable subpaths such as `extensions/<app-name>/`. Share source modules and build tooling only when each app still emits an independent self-contained ESM entrypoint. Keep app manifest names globally distinct within the Agent Server installation.
+When creating multiple Apps in one repository, give every App an independent package root containing its own `canvas-extension.json`, entrypoint, version, tests, README, and build tooling. Do not introduce a monorepo, shared runtime, or common build foundation unless the target repository explicitly requires one. Keep app manifest names globally distinct within the Agent Server installation.
 
 Treat installation as one app per request. The current Customize -> Apps flow accepts one `source`, optional `ref`, and optional `repo_path`; it does not recursively discover or bulk-install every manifest in a repository. Add each app separately using the same source/ref and its own `repo_path`.
 
@@ -226,4 +244,7 @@ Summarize:
 - `references/v1-contract.md` — exact manifest, host API, lifecycle, routing, trust, and current limitations.
 - `references/connections.md` — Agent Server HTTP, Automation service, WebSocket, and TypeScript client connection guidance.
 - `references/testing-and-installation.md` — test strategy, manual Canvas workflow, and installation coordinates.
-- `scripts/validate-extension.mjs` — dependency-free static validator for an app package directory.
+- `references/packaging-recipes.md` — one-file Vite, CSS, assets, Workers, and WASM rules.
+- `references/backend-safety.md` — authenticated requests, command safety, persistence, and prerequisite onboarding.
+- `references/acceptance-checklist.md` — automated checks and the local install/enable/reload lifecycle.
+- `scripts/validate-extension.mjs` — dependency-free static artifact validator for an App package directory.
