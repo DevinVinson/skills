@@ -22,7 +22,7 @@ Treat apps as trusted, same-realm browser code owned by the active Agent Server.
 
 ## Prefer the proven App authoring loop
 
-Treat an App as one authenticated browser dependency graph that Canvas imports from a Blob URL. Do not build a hosted SPA: the production result must be exactly one self-contained browser ESM entrypoint that exports `activate(host)`. Always ship this UI package even when it uses a separately installed Sidecar; never treat a Sidecar as another browser chunk or an automatic extension install hook.
+Treat an App as one authenticated browser dependency graph that Canvas imports from a Blob URL. Do not build a hosted SPA: the production result must be exactly one self-contained browser ESM entrypoint that exports `activate(host)`. Always ship this UI package even when it uses a separately installed Sidecar; make the App page the guided UI for Sidecar setup after the App is opened. Never treat a Sidecar as another browser chunk or an automatic extension install hook.
 
 For a new App, create an independent package in the target repository and implement its own UI, tests, and build tooling. Follow the Vite library-build reference in `references/packaging-recipes.md`; do not copy a shared starter or introduce a repository-wide runtime/workspace unless the target repository explicitly requires it.
 

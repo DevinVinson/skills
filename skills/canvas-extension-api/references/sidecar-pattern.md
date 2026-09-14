@@ -6,9 +6,9 @@ Use this reference when an App needs a separately installed service. Host API 1 
 
 1. **Canvas App package**: ship `canvas-extension.json` and exactly one self-contained browser ESM entrypoint exporting `activate(host)`. Bundle UI dependencies, CSS, and required assets into that entrypoint.
 2. **Sidecar distribution**: distribute the service, its versioned artifacts, and its service-specific installation and operation mechanism separately.
-3. **Onboarding and operator layer**: present status, disclosures, explicit consent, and lifecycle actions. Do not infer that installing or enabling the Canvas App authorizes any Sidecar mutation.
+3. **Onboarding and operator layer**: implement this as a guided UI in the App view. Present status, disclosures, explicit consent, and lifecycle actions there. Do not infer that installing or enabling the Canvas App authorizes any Sidecar mutation.
 
-Treat the Sidecar as an optional operational dependency, never as a runtime browser chunk or automatic extension install hook. Design the App to explain and recover from its absence.
+Recommend a phone-app model: install and enable the Canvas App, open its page, then configure the separately operated Sidecar for that deployment. Treat the Sidecar as an optional operational dependency, never as a runtime browser chunk or automatic extension install hook. Design the App to explain and recover from its absence.
 
 ## Choose a connection boundary
 
