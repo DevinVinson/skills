@@ -62,7 +62,9 @@ for (const [index, page] of (pages ?? []).entries()) {
   if (paths.has(page.path)) fail(`Page path ${page.path} is declared more than once.`); paths.add(page.path);
 }
 
-const entrypoint = checkDist ? path.join(root, "dist", "extension.js") : path.resolve(root, manifest.entrypoint ?? "");
+const entrypoint = checkDist
+  ? path.resolve(root, "dist", manifest.entrypoint ?? "")
+  : path.resolve(root, manifest.entrypoint ?? "");
 try {
   const [realRoot, realEntrypoint] = await Promise.all([realpath(root), realpath(entrypoint)]);
   if (!within(realRoot, realEntrypoint)) fail("Entrypoint escapes the App package root.");
@@ -82,7 +84,8 @@ try {
 if (checkDist) {
   try {
     const files = await readdir(path.join(root, "dist"), { recursive: true });
-    if (files.length !== 1 || files[0] !== "extension.js") fail(`Expected exactly dist/extension.js; found ${files.join(", ") || "nothing"}.`);
+    const expected = manifest.entrypoint;
+    if (files.length !== 1 || files[0] !== expected) fail(`Expected exactly dist/${expected}; found ${files.join(", ") || "nothing"}.`);
   } catch (error) { fail(`Cannot inspect dist output: ${error.message}`); }
 }
 if (errors.length) { for (const error of errors) console.error(`ERROR: ${error}`); process.exit(1); }
