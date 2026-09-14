@@ -22,7 +22,13 @@ The validator checks:
 - likely bare imports, remote imports, Node built-ins, dynamic imports, and source-map chunk references;
 - `registerPage` IDs against declared manifest IDs.
 
-Treat static import scanning as heuristic. Minified or generated bundles may require manual inspection. Treat a passing result as necessary but not sufficient.
+Treat static import scanning as heuristic. Minified or generated bundles may require manual inspection. Treat a passing result as necessary but not sufficient. When using `--dist`, the validator checks the manifest entrypoint path under `dist/`, so a manifest entrypoint such as `bundle.mjs` requires `dist/bundle.mjs`.
+
+## Sidecar test matrix
+
+Test the browser bundle independently from the Sidecar: load the single ESM entrypoint through Blob import and confirm no service secret or origin assumption is embedded. Test the narrow bridge or deployment adapter with real request shapes and error handling. Test real Sidecar health, version, capabilities, and domain operations, including timeouts and structured failures.
+
+Exercise `unknown`, `probing`, `missing`, `stopped`, `incompatible`, `ready`, and `unhealthy` onboarding states plus consent, install, start, repair, upgrade, and stop failures. Test repeated lifecycle actions, service restarts, version mismatches, backend switching, and Canvas remounts. Test App removal, service uninstall, and data deletion as distinct operations. Treat an unavailable Sidecar as a supported UI state, not a crash.
 
 ## Unit test shape
 

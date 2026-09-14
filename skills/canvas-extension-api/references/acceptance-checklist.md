@@ -2,7 +2,9 @@
 
 Run type-checking, build, unit/integration tests, static artifact validation, and a real Chromium Blob-import smoke test. A Vite preview or Node-only module import is not an adequate production test.
 
-Test manifest registrations, unsupported API rejection, root/nested/unknown routes, loading/empty/error/malformed-response states, exact Agent Server request shape, cancellation/stale response suppression, mount cleanup, activation cleanup, and remounting. For Workers/WASM/native integrations, exercise the genuine core behavior in the browser or focused temporary integration fixture.
+Test manifest registrations, unsupported API rejection, root/nested/unknown routes, loading/empty/error/malformed-response states, exact Agent Server request shape, cancellation/stale response suppression, mount cleanup, activation cleanup, and remounting. Confirm one-file browser output even for a multi-process architecture and confirm no service secret or origin assumption is embedded. For Workers/WASM/native integrations, exercise the genuine core behavior in the browser or focused temporary integration fixture.
+
+For a Sidecar-backed App, verify explicit consent and idempotent onboarding, restart and version-mismatch recovery, backend switching, and the distinction between App removal, service uninstall, and data deletion.
 
 For local Agent Canvas acceptance:
 

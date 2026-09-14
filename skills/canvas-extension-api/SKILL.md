@@ -1,6 +1,6 @@
 ---
 name: canvas-extension-api
-description: This skill should be used when the user asks to "create an OpenHands App", "scaffold a Canvas App", "build an app with the Canvas Extensions API", "add a custom interface to Agent Canvas", "validate an OpenHands App", or mentions Canvas Apps, Agent Canvas extensions, Blob-importable app bundles, registerPage, app pages, or canvas extension packages.
+description: This skill should be used when the user asks to "create an OpenHands App", "scaffold a Canvas App", "build an app with the Canvas Extensions API", "build an Agent Canvas App", "bundle a single-file Canvas App", "build a Sidecar-backed Canvas App", "add onboarding for an App service", "add a custom interface to Agent Canvas", "validate an OpenHands App", or mentions Canvas Apps, Agent Canvas extensions, Blob-importable app bundles, registerPage, app pages, Sidecars, or canvas extension packages.
 ---
 
 # Canvas Extensions API
@@ -22,7 +22,7 @@ Treat apps as trusted, same-realm browser code owned by the active Agent Server.
 
 ## Prefer the proven App authoring loop
 
-Treat an App as one authenticated browser dependency graph that Canvas imports from a Blob URL. Do not build a hosted SPA: the production result must be exactly one self-contained `extension.js` that exports `activate(host)`.
+Treat an App as one authenticated browser dependency graph that Canvas imports from a Blob URL. Do not build a hosted SPA: the production result must be exactly one self-contained browser ESM entrypoint that exports `activate(host)`. Always ship this UI package even when it uses a separately installed Sidecar; never treat a Sidecar as another browser chunk or an automatic extension install hook.
 
 For a new App, create an independent package in the target repository and implement its own UI, tests, and build tooling. Follow the Vite library-build reference in `references/packaging-recipes.md`; do not copy a shared starter or introduce a repository-wide runtime/workspace unless the target repository explicitly requires it.
 
@@ -35,11 +35,13 @@ node /path/to/canvas-extension-api/scripts/validate-extension.mjs /path/to/app
 node /path/to/canvas-extension-api/scripts/validate-extension.mjs /path/to/app --dist --marker <required-feature-marker>
 ```
 
-Treat the static validator as a gate, not a replacement for the browser Blob smoke test. Read `references/packaging-recipes.md` before adding CSS, raw assets, dynamic modules, Workers, or WASM. Read `references/backend-safety.md` before any Agent Server integration or persistence. Read `references/acceptance-checklist.md` before reporting local Canvas compatibility.
+Treat the static validator as a gate, not a replacement for the browser Blob smoke test. Read `references/packaging-recipes.md` before adding CSS, raw assets, dynamic modules, Workers, or WASM. Read `references/backend-safety.md` before any Agent Server integration or persistence. Read `references/sidecar-pattern.md` before designing a separately installed service or its onboarding. Read `references/acceptance-checklist.md` before reporting local Canvas compatibility.
 
 ## Establish the target
 
 Start by locating the target directory instead of assuming the current workspace. Inspect repository instructions, existing package management, build tooling, tests, and git status before editing.
+
+Make an early architecture decision: browser-only App, Agent Server-integrated App, Sidecar-backed App, or explicitly deployment-specific App. Keep the portable host API 1 surface separate from deployment-owned capabilities.
 
 Clarify only choices that materially affect implementation:
 
@@ -47,7 +49,8 @@ Clarify only choices that materially affect implementation:
 - target repository and subdirectory;
 - dependency-free JavaScript versus a bundled TypeScript/framework project;
 - Agent Server endpoints or host metadata required;
-- whether to build only, install locally, or prepare publication instructions.
+- whether to build only, install locally, or prepare publication instructions;
+- for a Sidecar: execution location, owner, connection route, secrets and data, lifecycle actions, and portability across Agent Canvas deployments.
 
 Default to one app with one routed page when requirements are otherwise clear. Keep the first implementation small and dependency-free unless the requested UI clearly benefits from a framework or the repository already has a bundler.
 
@@ -55,7 +58,7 @@ When creating multiple Apps in one repository, give every App an independent pac
 
 Treat installation as one app per request. The current Customize -> Apps flow accepts one `source`, optional `ref`, and optional `repo_path`; it does not recursively discover or bulk-install every manifest in a repository. Add each app separately using the same source/ref and its own `repo_path`.
 
-Read `references/v1-contract.md` before implementing unfamiliar Canvas Extensions API behavior. Read `references/connections.md` before connecting to Agent Server, the Automation service, or WebSocket endpoints. Read `references/testing-and-installation.md` before installing or testing inside Agent Canvas, especially for a multi-app repository.
+Read `references/v1-contract.md` before implementing unfamiliar Canvas Extensions API behavior. Read `references/connections.md` before connecting to Agent Server, the Automation service, or WebSocket endpoints. Read `references/sidecar-pattern.md` before proposing a Sidecar bridge, onboarding, or operator action. Read `references/testing-and-installation.md` before installing or testing inside Agent Canvas, especially for a multi-app repository.
 
 ## Inspect current upstream behavior
 
