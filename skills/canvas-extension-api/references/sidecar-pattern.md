@@ -8,8 +8,6 @@ Use this reference when an App needs a separately installed service. Host API 1 
 2. **Sidecar distribution**: distribute the service, its versioned artifacts, and its service-specific installation and operation mechanism separately.
 3. **Onboarding and operator layer**: implement this as a guided UI in the App view. Present status, disclosures, explicit consent, and lifecycle actions there. Do not infer that installing or enabling the Canvas App authorizes any Sidecar mutation.
 
-Recommend a phone-app model: install and enable the Canvas App, open its page, then configure the separately operated Sidecar for that deployment. Treat the Sidecar as an optional operational dependency, never as a runtime browser chunk or automatic extension install hook. Design the App to explain and recover from its absence.
-
 ## Choose a connection boundary
 
 Prefer connection patterns in this order:
