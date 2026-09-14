@@ -4,7 +4,7 @@ Use the narrowest supported connection surface. Treat backend URLs, session keys
 
 ## Prefer the TypeScript client
 
-Prefer [`@openhands/typescript-client`](https://github.com/OpenHands/typescript-client) whenever a bundled TypeScript app has the connection inputs required by the client and the client covers the needed Agent Server API. It provides maintained request models, typed clients, event types, compatibility checks, and WebSocket lifecycle code that track the canonical Agent Server contract.
+Prefer [`@openhands/typescript-client`](https://github.com/OpenHands/software-agent-sdk/tree/main/clients/typescript) whenever a bundled TypeScript app has the connection inputs required by the client and the client covers the needed Agent Server API. It provides maintained request models, typed clients, event types, compatibility checks, and WebSocket lifecycle code that track the canonical Agent Server contract.
 
 Use direct `fetch` or raw `WebSocket` only when:
 
